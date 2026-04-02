@@ -12,18 +12,30 @@ import (
 )
 
 type Config struct {
-	RemnawaveLogPath     string
-	ViolationLogPath     string
-	EnableLogArchive     bool
-	AccessLogArchivePath string
-	MaxIPsPerKey         int
-	CheckInterval        int
-	LogClearInterval     int
-	WebhookURL           string
-	WebhookTemplate      string
-	WebhookHeaders       map[string]string
-	BanDurationMinutes   int
-	WhitelistEmails      []string
+	// API
+	RemnawaveAPIURL   string
+	RemnawaveAPIToken string
+	// Monitoring
+	CheckInterval      int
+	ActiveIPWindow     int
+	Tolerance          int
+	Cooldown           int
+	UserCacheTTL       int
+	DefaultDeviceLimit int
+	// Action
+	ActionMode          string // "manual" or "auto"
+	AutoDisableDuration int    // minutes, 0 = permanent
+	// Telegram
+	TelegramBotToken string
+	TelegramChatID   int64
+	TelegramThreadID int64
+	TelegramAdminIDs []int64
+	// Whitelist
+	WhitelistUserIDs []string
+	// Redis
+	RedisURL string
+	// Timezone
+	Timezone string
 }
 
 func LoadConfig(envPath string) (*Config, error) {
@@ -40,23 +52,63 @@ func LoadConfig(envPath string) (*Config, error) {
 		logrus.WithError(err).Warn("Не удалось загрузить .env файл, используются переменные окружения")
 	}
 
-	cfg := &Config{
-		RemnawaveLogPath:     getEnv("REMNAWAVE_LOG_PATH", "/var/log/remnanode/access.log"),
-		ViolationLogPath:     getEnv("VIOLATION_LOG_PATH", "/var/log/remnawave-limiter/access-limiter.log"),
-		EnableLogArchive:     getEnvBool("ENABLE_LOG_ARCHIVE", false),
-		AccessLogArchivePath: getEnv("ACCESS_LOG_ARCHIVE_PATH", "/var/log/remnawave-limiter/access-archive.log"),
-		MaxIPsPerKey:       getEnvInt("MAX_IPS_PER_KEY", 1),
-		CheckInterval:      getEnvInt("CHECK_INTERVAL", 5),
-		LogClearInterval:   getEnvInt("LOG_CLEAR_INTERVAL", 3600),
-		WebhookURL:         getEnv("WEBHOOK_URL", ""),
-		WebhookTemplate:    getEnv("WEBHOOK_TEMPLATE", ""),
-		WebhookHeaders:     parseHeaders(getEnv("WEBHOOK_HEADERS", "")),
-		BanDurationMinutes: getEnvInt("BAN_DURATION_MINUTES", 10),
-		WhitelistEmails:    parseList(getEnv("WHITELIST_EMAILS", "")),
+	// Parse required fields
+	remnawaveAPIURL := os.Getenv("REMNAWAVE_API_URL")
+	if remnawaveAPIURL == "" {
+		return nil, fmt.Errorf("REMNAWAVE_API_URL обязательный параметр")
 	}
 
-	if cfg.WebhookURL == "none" || strings.TrimSpace(cfg.WebhookURL) == "" {
-		cfg.WebhookURL = ""
+	remnawaveAPIToken := os.Getenv("REMNAWAVE_API_TOKEN")
+	if remnawaveAPIToken == "" {
+		return nil, fmt.Errorf("REMNAWAVE_API_TOKEN обязательный параметр")
+	}
+
+	telegramBotToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if telegramBotToken == "" {
+		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN обязательный параметр")
+	}
+
+	telegramChatIDStr := os.Getenv("TELEGRAM_CHAT_ID")
+	if telegramChatIDStr == "" {
+		return nil, fmt.Errorf("TELEGRAM_CHAT_ID обязательный параметр")
+	}
+	telegramChatID, err := strconv.ParseInt(telegramChatIDStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("TELEGRAM_CHAT_ID должен быть числом: %v", err)
+	}
+
+	telegramAdminIDsStr := os.Getenv("TELEGRAM_ADMIN_IDS")
+	if telegramAdminIDsStr == "" {
+		return nil, fmt.Errorf("TELEGRAM_ADMIN_IDS обязательный параметр")
+	}
+	telegramAdminIDs, err := parseint64list(telegramAdminIDsStr)
+	if err != nil {
+		return nil, fmt.Errorf("TELEGRAM_ADMIN_IDS: %v", err)
+	}
+
+	// Parse optional fields
+	telegramThreadID := getEnvInt64("TELEGRAM_THREAD_ID", 0)
+
+	actionMode := getEnv("ACTION_MODE", "manual")
+
+	cfg := &Config{
+		RemnawaveAPIURL:     remnawaveAPIURL,
+		RemnawaveAPIToken:   remnawaveAPIToken,
+		CheckInterval:       getEnvInt("CHECK_INTERVAL", 30),
+		ActiveIPWindow:      getEnvInt("ACTIVE_IP_WINDOW", 300),
+		Tolerance:           getEnvInt("TOLERANCE", 0),
+		Cooldown:            getEnvInt("COOLDOWN", 300),
+		UserCacheTTL:        getEnvInt("USER_CACHE_TTL", 600),
+		DefaultDeviceLimit:  getEnvInt("DEFAULT_DEVICE_LIMIT", 0),
+		ActionMode:          actionMode,
+		AutoDisableDuration: getEnvInt("AUTO_DISABLE_DURATION", 0),
+		TelegramBotToken:    telegramBotToken,
+		TelegramChatID:      telegramChatID,
+		TelegramThreadID:    telegramThreadID,
+		TelegramAdminIDs:    telegramAdminIDs,
+		WhitelistUserIDs:    parseList(getEnv("WHITELIST_USER_IDS", "")),
+		RedisURL:            getEnv("REDIS_URL", "redis://redis:6379"),
+		Timezone:            getEnv("TIMEZONE", "UTC"),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -67,60 +119,24 @@ func LoadConfig(envPath string) (*Config, error) {
 }
 
 func (cfg *Config) Validate() error {
-	if cfg.MaxIPsPerKey <= 0 {
-		return fmt.Errorf("MAX_IPS_PER_KEY должен быть > 0, получено %d", cfg.MaxIPsPerKey)
+	if cfg.ActionMode != "manual" && cfg.ActionMode != "auto" {
+		return fmt.Errorf("ACTION_MODE должен быть \"manual\" или \"auto\", получено %q", cfg.ActionMode)
 	}
 	if cfg.CheckInterval <= 0 {
 		return fmt.Errorf("CHECK_INTERVAL должен быть > 0, получено %d", cfg.CheckInterval)
 	}
-	if cfg.LogClearInterval <= 0 {
-		return fmt.Errorf("LOG_CLEAR_INTERVAL должен быть > 0, получено %d", cfg.LogClearInterval)
+	if cfg.ActiveIPWindow <= 0 {
+		return fmt.Errorf("ACTIVE_IP_WINDOW должен быть > 0, получено %d", cfg.ActiveIPWindow)
 	}
-	if cfg.BanDurationMinutes <= 0 {
-		return fmt.Errorf("BAN_DURATION_MINUTES должен быть > 0, получено %d", cfg.BanDurationMinutes)
+	if cfg.Cooldown <= 0 {
+		return fmt.Errorf("COOLDOWN должен быть > 0, получено %d", cfg.Cooldown)
 	}
-
-	logPaths := map[string]string{
-		"REMNAWAVE_LOG_PATH": cfg.RemnawaveLogPath,
-		"VIOLATION_LOG_PATH": cfg.ViolationLogPath,
-	}
-	if cfg.EnableLogArchive {
-		logPaths["ACCESS_LOG_ARCHIVE_PATH"] = cfg.AccessLogArchivePath
-	}
-	for key, logPath := range logPaths {
-		dir := filepath.Dir(logPath)
-		if info, err := os.Stat(dir); err != nil {
-			return fmt.Errorf("директория для %s (%s) недоступна: %v", key, dir, err)
-		} else if !info.IsDir() {
-			return fmt.Errorf("путь %s для %s не является директорией", dir, key)
-		}
-	}
-
 	return nil
 }
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
-	}
-	return defaultValue
-}
-
-func getEnvBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		switch strings.ToLower(value) {
-		case "true", "1", "yes":
-			return true
-		case "false", "0", "no":
-			return false
-		default:
-			logrus.WithFields(logrus.Fields{
-				"key":     key,
-				"value":   value,
-				"default": defaultValue,
-			}).Warnf("Не удалось преобразовать %s в bool, используется значение по умолчанию %v", key, defaultValue)
-			return defaultValue
-		}
 	}
 	return defaultValue
 }
@@ -141,30 +157,46 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-func parseHeaders(headersStr string) map[string]string {
-	headers := make(map[string]string)
-	if headersStr == "" {
-		return headers
-	}
-
-	pairs := strings.Split(headersStr, ",")
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, ":", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			headers[key] = value
+func getEnvInt64(key string, defaultValue int64) int64 {
+	if value := os.Getenv(key); value != "" {
+		intVal, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"key":     key,
+				"value":   value,
+				"default": defaultValue,
+			}).Warnf("Не удалось преобразовать %s в число, используется значение по умолчанию %d", key, defaultValue)
+			return defaultValue
 		}
+		return intVal
 	}
+	return defaultValue
+}
 
-	return headers
+func parseint64list(s string) ([]int64, error) {
+	if s == "" {
+		return []int64{}, nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		val, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("невозможно преобразовать %q в число: %v", trimmed, err)
+		}
+		result = append(result, val)
+	}
+	return result, nil
 }
 
 func parseList(listStr string) []string {
 	if listStr == "" {
 		return []string{}
 	}
-
 	items := strings.Split(listStr, ",")
 	result := make([]string, 0, len(items))
 	for _, item := range items {
@@ -173,6 +205,5 @@ func parseList(listStr string) []string {
 			result = append(result, trimmed)
 		}
 	}
-
 	return result
 }
