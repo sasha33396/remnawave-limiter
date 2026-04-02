@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,16 +39,11 @@ type Config struct {
 
 func LoadConfig(envPath string) (*Config, error) {
 	if envPath == "" {
-		execPath, err := os.Executable()
-		if err == nil {
-			envPath = filepath.Join(filepath.Dir(execPath), ".env")
-		} else {
-			envPath = ".env"
-		}
+		envPath = ".env"
 	}
 
 	if err := godotenv.Load(envPath); err != nil {
-		logrus.WithError(err).Warn("Не удалось загрузить .env файл, используются переменные окружения")
+		logrus.Debug("Файл .env не найден, используются переменные окружения")
 	}
 
 	// Parse required fields

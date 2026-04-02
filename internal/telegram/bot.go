@@ -194,8 +194,10 @@ func (b *Bot) handleCallback(ctx context.Context, callback *tgbotapi.CallbackQue
 	editMsg := tgbotapi.NewEditMessageText(b.chatID, callback.Message.MessageID, originalHTML+actionResult)
 	editMsg.ParseMode = tgbotapi.ModeHTML
 	editMsg.DisableWebPagePreview = true
-	// Remove keyboard by setting empty markup
-	emptyMarkup := tgbotapi.NewInlineKeyboardMarkup()
+	// Remove keyboard by setting empty inline_keyboard array
+	emptyMarkup := tgbotapi.InlineKeyboardMarkup{
+		InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{},
+	}
 	editMsg.ReplyMarkup = &emptyMarkup
 
 	if _, err := b.api.Request(editMsg); err != nil {
