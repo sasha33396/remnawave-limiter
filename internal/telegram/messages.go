@@ -14,13 +14,12 @@ func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, loc 
 
 	b.WriteString("⚠️ <b>Превышение лимита устройств</b>\n\n")
 	b.WriteString(fmt.Sprintf("👤 Пользователь: <code>%s</code>\n", escapeHTML(user.Username)))
-	b.WriteString(fmt.Sprintf("🔑 Подписка: <code>%s</code>\n", escapeHTML(user.Email)))
 	b.WriteString(fmt.Sprintf("📊 Лимит: %d | Обнаружено: %d IP\n", limit, len(ips)))
 	b.WriteString(fmt.Sprintf("🕐 %s\n", time.Now().In(loc).Format("02.01.2006 15:04:05")))
 
 	b.WriteString("\n📍 IP-адреса:\n")
 	for _, ip := range ips {
-		b.WriteString(fmt.Sprintf("  • <code>%s</code> (нода: %s)\n", escapeHTML(ip.IP), escapeHTML(ip.NodeName)))
+		b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (нода: %s)\n", ip.IP, escapeHTML(ip.IP), escapeHTML(ip.NodeName)))
 	}
 
 	if user.SubscriptionURL != "" {
@@ -36,7 +35,6 @@ func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durati
 
 	b.WriteString("🔒 <b>Подписка автоматически отключена</b>\n\n")
 	b.WriteString(fmt.Sprintf("👤 Пользователь: <code>%s</code>\n", escapeHTML(user.Username)))
-	b.WriteString(fmt.Sprintf("🔑 Подписка: <code>%s</code>\n", escapeHTML(user.Email)))
 	b.WriteString(fmt.Sprintf("📊 Лимит: %d | Обнаружено: %d IP\n", limit, len(ips)))
 
 	if durationMinutes == 0 {
@@ -49,7 +47,7 @@ func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durati
 
 	b.WriteString("\n📍 IP-адреса:\n")
 	for _, ip := range ips {
-		b.WriteString(fmt.Sprintf("  • <code>%s</code> (нода: %s)\n", escapeHTML(ip.IP), escapeHTML(ip.NodeName)))
+		b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (нода: %s)\n", ip.IP, escapeHTML(ip.IP), escapeHTML(ip.NodeName)))
 	}
 
 	return b.String()

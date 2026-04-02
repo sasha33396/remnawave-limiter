@@ -34,13 +34,12 @@ func TestFormatManualAlert(t *testing.T) {
 	}{
 		{"contains title", "Превышение лимита устройств"},
 		{"contains username", "<code>testuser</code>"},
-		{"contains email", "<code>test@example.com</code>"},
 		{"contains limit", "3"},
 		{"contains ip count", "4 IP"},
-		{"contains ip1", "<code>1.1.1.1</code>"},
-		{"contains ip2", "<code>2.2.2.2</code>"},
-		{"contains ip3", "<code>3.3.3.3</code>"},
-		{"contains ip4", "<code>4.4.4.4</code>"},
+		{"contains ip1 link", "https://ipinfo.io/1.1.1.1"},
+		{"contains ip2 link", "https://ipinfo.io/2.2.2.2"},
+		{"contains ip3 link", "https://ipinfo.io/3.3.3.3"},
+		{"contains ip4 link", "https://ipinfo.io/4.4.4.4"},
 		{"contains node1", "Node-DE"},
 		{"contains node2", "Node-US"},
 		{"contains node3", "Node-NL"},
@@ -80,9 +79,8 @@ func TestFormatAutoAlert(t *testing.T) {
 	}{
 		{"contains auto title", "автоматически отключена"},
 		{"contains username", "<code>autouser</code>"},
-		{"contains email", "<code>auto@example.com</code>"},
 		{"contains duration", "30 мин"},
-		{"contains ip", "<code>5.5.5.5</code>"},
+		{"contains ip link", "https://ipinfo.io/5.5.5.5"},
 	}
 
 	for _, c := range checks {
