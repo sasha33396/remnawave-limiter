@@ -89,17 +89,14 @@ func (c *Cache) IsWhitelisted(ctx context.Context, userID string) (bool, error) 
 }
 
 func (c *Cache) InitWhitelist(ctx context.Context, userIDs []string) error {
-	pipe := c.client.Pipeline()
-	pipe.Del(ctx, keyWhitelist)
-	if len(userIDs) > 0 {
-		members := make([]interface{}, len(userIDs))
-		for i, id := range userIDs {
-			members[i] = id
-		}
-		pipe.SAdd(ctx, keyWhitelist, members...)
+	if len(userIDs) == 0 {
+		return nil
 	}
-	_, err := pipe.Exec(ctx)
-	return err
+	members := make([]interface{}, len(userIDs))
+	for i, id := range userIDs {
+		members[i] = id
+	}
+	return c.client.SAdd(ctx, keyWhitelist, members...).Err()
 }
 
 func (c *Cache) SetRestoreTimer(ctx context.Context, uuid string, duration time.Duration) error {

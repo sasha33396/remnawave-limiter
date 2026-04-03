@@ -70,14 +70,20 @@
 
 ## Установка
 
-### 1. Склонировать репозиторий
+### 1. Создать директорию
 
 ```bash
-git clone https://github.com/syvlech/remnawave-limiter.git
-cd remnawave-limiter
+mkdir -p /opt/remnawave-limiter && cd /opt/remnawave-limiter
 ```
 
-### 2. Создать конфигурацию
+### 2. Скачать необходимые файлы
+
+```bash
+curl -O https://raw.githubusercontent.com/syvlech/remnawave-limiter/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/syvlech/remnawave-limiter/master/.env.example
+```
+
+### 3. Создать конфигурацию
 
 ```bash
 cp .env.example .env
@@ -94,9 +100,10 @@ TELEGRAM_CHAT_ID=-1001234567890
 TELEGRAM_ADMIN_IDS=123456789
 ```
 
-### 3. Запустить
+### 4. Запустить
 
 ```bash
+docker compose pull
 docker compose up -d
 ```
 
@@ -109,6 +116,7 @@ docker compose logs -f limiter
 ### Обновление
 
 ```bash
+cd /opt/remnawave-limiter
 docker compose pull
 docker compose up -d
 ```
@@ -117,44 +125,22 @@ docker compose up -d
 
 Все настройки через `.env` файл или переменные окружения.
 
-### API подключение
-
-| Параметр | Обязательный | Описание |
-|----------|:---:|----------|
-| `REMNAWAVE_API_URL` | да | Адрес панели Remnawave |
-| `REMNAWAVE_API_TOKEN` | да | API-токен (генерируется в панели) |
-
-### Мониторинг
-
 | Параметр | По умолчанию | Описание |
 |----------|:---:|----------|
+| `REMNAWAVE_API_URL` | **обязательный** | Адрес панели Remnawave |
+| `REMNAWAVE_API_TOKEN` | **обязательный** | API-токен (генерируется в панели) |
+| `TELEGRAM_BOT_TOKEN` | **обязательный** | Токен бота от @BotFather |
+| `TELEGRAM_CHAT_ID` | **обязательный** | ID чата/канала/группы для алертов |
+| `TELEGRAM_ADMIN_IDS` | **обязательный** | ID админов через запятую (только они могут нажимать кнопки) |
+| `TELEGRAM_THREAD_ID` | — | ID треда/топика в супергруппе |
 | `CHECK_INTERVAL` | `30` | Интервал проверки (секунды) |
 | `ACTIVE_IP_WINDOW` | `300` | IP считается активным, если `lastSeen` < этого значения (секунды) |
 | `TOLERANCE` | `0` | Допустимое превышение лимита. Если лимит 3 и tolerance 1, реакция при 5+ IP |
 | `COOLDOWN` | `300` | Кулдаун между алертами на одного пользователя (секунды) |
 | `USER_CACHE_TTL` | `600` | Время жизни кэша данных пользователя (секунды) |
 | `DEFAULT_DEVICE_LIMIT` | `0` | Лимит по умолчанию, если у пользователя не задан `hwidDeviceLimit`. 0 = не ограничивать |
-
-### Режим реакции
-
-| Параметр | По умолчанию | Описание |
-|----------|:---:|----------|
 | `ACTION_MODE` | `manual` | `manual` — алерт с кнопками, `auto` — автоотключение подписки |
-| `AUTO_DISABLE_DURATION` | `0` | Длительность временного отключения подписки в минутах. 0 = только перманентное отключение. В `manual` режиме добавляет кнопку "Отключить на N мин", в `auto` — задаёт время автовосстановления |
-
-### Telegram
-
-| Параметр | Обязательный | Описание |
-|----------|:---:|----------|
-| `TELEGRAM_BOT_TOKEN` | да | Токен бота от @BotFather |
-| `TELEGRAM_CHAT_ID` | да | ID чата/канала/группы для алертов |
-| `TELEGRAM_THREAD_ID` | нет | ID треда/топика в супергруппе |
-| `TELEGRAM_ADMIN_IDS` | да | ID админов через запятую (только они могут нажимать кнопки) |
-
-### Прочее
-
-| Параметр | По умолчанию | Описание |
-|----------|:---:|----------|
+| `AUTO_DISABLE_DURATION` | `0` | Длительность временного отключения в минутах. 0 = перманентное. В `manual` добавляет кнопку, в `auto` — задаёт время автовосстановления |
 | `WHITELIST_USER_IDS` | — | UUID для исключения из проверки (через запятую) |
 | `REDIS_URL` | `redis://redis:6379` | Адрес Redis |
 | `TIMEZONE` | `UTC` | Часовой пояс для timestamps в алертах (например `Europe/Moscow`) |
@@ -183,9 +169,9 @@ docker compose up -d
 🕐 2025-11-29 04:15:30 (Europe/Moscow)
 
 📍 IP-адреса:
-  • 178.66.157.246 (нода: yandex-1)
-  • 90.188.59.122 (нода: yandex-1)
-  • 46.250.75.216 (нода: germany-2)
+  • 10.0.1.10 (нода: node-1)
+  • 10.0.2.20 (нода: node-1)
+  • 10.0.3.30 (нода: node-2)
 
 🔗 Профиль
 
@@ -206,36 +192,6 @@ docker compose up -d
 Подписка отключается автоматически, бот отправляет информационный алерт с кнопкой "Включить подписку".
 
 Если `AUTO_DISABLE_DURATION > 0` — подписка автоматически восстанавливается по таймеру.
-
-## Remnawave API
-
-Проект использует следующие эндпоинты:
-
-| Эндпоинт | Назначение |
-|----------|-----------|
-| `GET /api/nodes` | Список активных нод |
-| `POST /api/ip-control/fetch-users-ips/{nodeUuid}` | IP пользователей на ноде |
-| `GET /api/ip-control/fetch-users-ips/result/{jobId}` | Результат запроса IP |
-| `GET /api/users/by-id/{id}` | Данные пользователя и лимит |
-| `POST /api/ip-control/drop-connections` | Сброс подключений |
-| `POST /api/users/{uuid}/actions/disable` | Отключение подписки |
-| `POST /api/users/{uuid}/actions/enable` | Включение подписки |
-
-## Структура проекта
-
-```
-cmd/limiter/main.go              → Точка входа
-internal/
-├── config/config.go             → Конфигурация (.env)
-├── api/client.go                → HTTP-клиент Remnawave API
-├── api/types.go                 → Типы API
-├── monitor/monitor.go           → Основной цикл мониторинга
-├── cache/cache.go               → Redis: кэш, кулдауны, whitelist
-├── telegram/bot.go              → Telegram-бот
-├── telegram/messages.go         → Форматирование сообщений
-├── i18n/i18n.go                 → Интернационализация (ru/en)
-└── version/version.go           → Версия
-```
 
 ## FAQ
 

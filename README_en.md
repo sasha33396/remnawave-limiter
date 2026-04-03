@@ -70,14 +70,20 @@ Automatic monitoring of simultaneous user connections from the Remnawave panel. 
 
 ## Installation
 
-### 1. Clone the repository
+### 1. Create directory
 
 ```bash
-git clone https://github.com/syvlech/remnawave-limiter.git
-cd remnawave-limiter
+mkdir -p /opt/remnawave-limiter && cd /opt/remnawave-limiter
 ```
 
-### 2. Create configuration
+### 2. Download required files
+
+```bash
+curl -O https://raw.githubusercontent.com/syvlech/remnawave-limiter/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/syvlech/remnawave-limiter/master/.env.example
+```
+
+### 3. Create configuration
 
 ```bash
 cp .env.example .env
@@ -95,9 +101,10 @@ TELEGRAM_ADMIN_IDS=123456789
 LANGUAGE=en
 ```
 
-### 3. Start
+### 4. Start
 
 ```bash
+docker compose pull
 docker compose up -d
 ```
 
@@ -110,6 +117,7 @@ docker compose logs -f limiter
 ### Update
 
 ```bash
+cd /opt/remnawave-limiter
 docker compose pull
 docker compose up -d
 ```
@@ -118,44 +126,22 @@ docker compose up -d
 
 All settings via `.env` file or environment variables.
 
-### API connection
-
-| Parameter | Required | Description |
-|-----------|:---:|-----------|
-| `REMNAWAVE_API_URL` | yes | Remnawave panel address |
-| `REMNAWAVE_API_TOKEN` | yes | API token (generated in the panel) |
-
-### Monitoring
-
 | Parameter | Default | Description |
 |-----------|:---:|-----------|
+| `REMNAWAVE_API_URL` | **required** | Remnawave panel address |
+| `REMNAWAVE_API_TOKEN` | **required** | API token (generated in the panel) |
+| `TELEGRAM_BOT_TOKEN` | **required** | Bot token from @BotFather |
+| `TELEGRAM_CHAT_ID` | **required** | Chat/channel/group ID for alerts |
+| `TELEGRAM_ADMIN_IDS` | **required** | Admin IDs separated by commas (only they can press buttons) |
+| `TELEGRAM_THREAD_ID` | — | Thread/topic ID in a supergroup |
 | `CHECK_INTERVAL` | `30` | Check interval (seconds) |
 | `ACTIVE_IP_WINDOW` | `300` | IP is considered active if `lastSeen` < this value (seconds) |
 | `TOLERANCE` | `0` | Allowed excess over the limit. If limit is 3 and tolerance is 1, reaction at 5+ IPs |
 | `COOLDOWN` | `300` | Cooldown between alerts for one user (seconds) |
 | `USER_CACHE_TTL` | `600` | User data cache TTL (seconds) |
 | `DEFAULT_DEVICE_LIMIT` | `0` | Default limit if user has no `hwidDeviceLimit`. 0 = no limit |
-
-### Reaction mode
-
-| Parameter | Default | Description |
-|-----------|:---:|-----------|
 | `ACTION_MODE` | `manual` | `manual` — alert with buttons, `auto` — auto-disable subscription |
-| `AUTO_DISABLE_DURATION` | `0` | Temporary disable duration in minutes. 0 = permanent only. In `manual` mode adds a "Disable for N min" button, in `auto` mode sets auto-restore time |
-
-### Telegram
-
-| Parameter | Required | Description |
-|-----------|:---:|-----------|
-| `TELEGRAM_BOT_TOKEN` | yes | Bot token from @BotFather |
-| `TELEGRAM_CHAT_ID` | yes | Chat/channel/group ID for alerts |
-| `TELEGRAM_THREAD_ID` | no | Thread/topic ID in a supergroup |
-| `TELEGRAM_ADMIN_IDS` | yes | Admin IDs separated by commas (only they can press buttons) |
-
-### Other
-
-| Parameter | Default | Description |
-|-----------|:---:|-----------|
+| `AUTO_DISABLE_DURATION` | `0` | Temporary disable duration in minutes. 0 = permanent only. In `manual` adds a button, in `auto` sets auto-restore time |
 | `WHITELIST_USER_IDS` | — | UUIDs to exclude from checks (comma-separated) |
 | `REDIS_URL` | `redis://redis:6379` | Redis address |
 | `TIMEZONE` | `UTC` | Timezone for alert timestamps (e.g. `Europe/Moscow`) |
@@ -184,9 +170,9 @@ When the limit is exceeded, the bot sends an alert with buttons:
 🕐 2025-11-29 04:15:30
 
 📍 IP addresses:
-  • 178.66.157.246 (node: yandex-1)
-  • 90.188.59.122 (node: yandex-1)
-  • 46.250.75.216 (node: germany-2)
+  • 10.0.1.10 (node: node-1)
+  • 10.0.2.20 (node: node-1)
+  • 10.0.3.30 (node: node-2)
 
 🔗 Profile
 
@@ -207,36 +193,6 @@ When the limit is exceeded, the bot sends an alert with buttons:
 The subscription is disabled automatically, the bot sends an informational alert with an "Enable subscription" button.
 
 If `AUTO_DISABLE_DURATION > 0` — the subscription is automatically restored by timer.
-
-## Remnawave API
-
-The project uses the following endpoints:
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/nodes` | List of active nodes |
-| `POST /api/ip-control/fetch-users-ips/{nodeUuid}` | User IPs on a node |
-| `GET /api/ip-control/fetch-users-ips/result/{jobId}` | IP request result |
-| `GET /api/users/by-id/{id}` | User data and limit |
-| `POST /api/ip-control/drop-connections` | Drop connections |
-| `POST /api/users/{uuid}/actions/disable` | Disable subscription |
-| `POST /api/users/{uuid}/actions/enable` | Enable subscription |
-
-## Project structure
-
-```
-cmd/limiter/main.go              → Entry point
-internal/
-├── config/config.go             → Configuration (.env)
-├── api/client.go                → Remnawave API HTTP client
-├── api/types.go                 → API types
-├── monitor/monitor.go           → Main monitoring loop
-├── cache/cache.go               → Redis: cache, cooldowns, whitelist
-├── telegram/bot.go              → Telegram bot
-├── telegram/messages.go         → Message formatting
-├── i18n/i18n.go                 → Internationalization (ru/en)
-└── version/version.go           → Version
-```
 
 ## FAQ
 
