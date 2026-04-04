@@ -6,7 +6,7 @@ Automatic monitoring of simultaneous user connections from the Remnawave panel. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[🇷🇺 Русская версия](README.md)
+[Русская версия](README.md)
 
 ## Features
 
