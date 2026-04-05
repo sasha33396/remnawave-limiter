@@ -100,7 +100,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 TELEGRAM_ADMIN_IDS=123456789
 ```
 
-### 4. Запустить
+### 4. Запустить 
 
 ```bash
 docker compose pull
