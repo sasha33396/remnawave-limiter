@@ -29,6 +29,9 @@ type Config struct {
 	RedisURL            string
 	Timezone            string
 	Language            string
+	RemnawaveCookies    string
+	WebhookURL          string
+	WebhookSecret       string
 }
 
 func LoadConfig(envPath string) (*Config, error) {
@@ -96,6 +99,9 @@ func LoadConfig(envPath string) (*Config, error) {
 		RedisURL:            getEnv("REDIS_URL", "redis://redis:6379"),
 		Timezone:            getEnv("TIMEZONE", "UTC"),
 		Language:            getEnv("LANGUAGE", "ru"),
+		RemnawaveCookies:    getEnv("REMNAWAVE_COOKIES", ""),
+		WebhookURL:          getEnv("WEBHOOK_URL", ""),
+		WebhookSecret:       getEnv("WEBHOOK_SECRET", ""),
 	}
 
 	if err := cfg.Validate(); err != nil {

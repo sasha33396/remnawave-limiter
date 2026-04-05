@@ -13,6 +13,7 @@ import (
 	"github.com/remnawave/limiter/internal/config"
 	"github.com/remnawave/limiter/internal/i18n"
 	"github.com/remnawave/limiter/internal/telegram"
+	"github.com/remnawave/limiter/internal/webhook"
 )
 
 type Monitor struct {
@@ -20,11 +21,12 @@ type Monitor struct {
 	api      *api.Client
 	cache    *cache.Cache
 	bot      *telegram.Bot
+	webhook  *webhook.Client
 	logger   *logrus.Logger
 	location *time.Location
 }
 
-func New(cfg *config.Config, apiClient *api.Client, c *cache.Cache, bot *telegram.Bot, logger *logrus.Logger) (*Monitor, error) {
+func New(cfg *config.Config, apiClient *api.Client, c *cache.Cache, bot *telegram.Bot, wh *webhook.Client, logger *logrus.Logger) (*Monitor, error) {
 	loc, err := time.LoadLocation(cfg.Timezone)
 	if err != nil {
 		return nil, fmt.Errorf("неверная таймзона %q: %w", cfg.Timezone, err)
@@ -35,6 +37,7 @@ func New(cfg *config.Config, apiClient *api.Client, c *cache.Cache, bot *telegra
 		api:      apiClient,
 		cache:    c,
 		bot:      bot,
+		webhook:  wh,
 		logger:   logger,
 		location: loc,
 	}, nil
@@ -198,6 +201,8 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		"violations": violationCount,
 	}).Warn(i18n.T("log.limit_exceeded"))
 
+	m.sendWebhook(ctx, user, uniqueIPs, limit, violationCount)
+
 	if m.config.ActionMode == "auto" {
 		m.handleAutoAction(ctx, user, uniqueIPs, limit, violationCount)
 	} else {
@@ -281,6 +286,49 @@ func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ip
 	if err := m.bot.SendAutoAlert(text, user.UUID); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отправки auto alert")
 	}
+}
+
+func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64) {
+	if m.webhook == nil {
+		return
+	}
+
+	ipPayloads := make([]webhook.IPPayload, len(ips))
+	for i, ip := range ips {
+		ipPayloads[i] = webhook.IPPayload{
+			IP:       ip.IP,
+			NodeName: ip.NodeName,
+			NodeUUID: ip.NodeUUID,
+			LastSeen: ip.LastSeen,
+		}
+	}
+
+	payload := &webhook.Payload{
+		Event:      "violation_detected",
+		ActionMode: m.config.ActionMode,
+		User: webhook.UserPayload{
+			UUID:            user.UUID,
+			UserID:          user.UserID,
+			Username:        user.Username,
+			Email:           user.Email,
+			TelegramID:      user.TelegramID,
+			SubscriptionURL: user.SubscriptionURL,
+		},
+		Violation: webhook.ViolationPayload{
+			IPs:               ipPayloads,
+			IPCount:           len(ips),
+			DeviceLimit:       limit,
+			Tolerance:         m.config.Tolerance,
+			EffectiveLimit:    limit + m.config.Tolerance,
+			ViolationCount24h: violationCount,
+		},
+		Action: webhook.ActionPayload{
+			AutoDisableDurationMin: m.config.AutoDisableDuration,
+		},
+		Timestamp: time.Now(),
+	}
+
+	m.webhook.Send(ctx, payload)
 }
 
 func (m *Monitor) restoreLoop(ctx context.Context) {

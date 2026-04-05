@@ -16,6 +16,7 @@ import (
 	"github.com/remnawave/limiter/internal/monitor"
 	"github.com/remnawave/limiter/internal/telegram"
 	"github.com/remnawave/limiter/internal/version"
+	"github.com/remnawave/limiter/internal/webhook"
 )
 
 func main() {
@@ -55,13 +56,25 @@ func main() {
 	apiClient := api.NewClient(cfg.RemnawaveAPIURL, cfg.RemnawaveAPIToken)
 	apiClient.SetLogger(logger)
 
+	if cfg.RemnawaveCookies != "" {
+		cookies := api.ParseCookies(cfg.RemnawaveCookies)
+		apiClient.SetCookies(cookies)
+		logger.Info("Cookie авторизация включена")
+	}
+
 	bot, err := telegram.NewBot(cfg.TelegramBotToken, cfg.TelegramChatID, cfg.TelegramThreadID, cfg.TelegramAdminIDs, logger)
 	if err != nil {
 		logger.Fatalf("Ошибка Telegram: %v", err)
 	}
 	logger.Info("Telegram бот подключён")
 
-	mon, err := monitor.New(cfg, apiClient, redisCache, bot, logger)
+	var webhookClient *webhook.Client
+	if cfg.WebhookURL != "" {
+		webhookClient = webhook.NewClient(cfg.WebhookURL, cfg.WebhookSecret, logger)
+		logger.Info("Webhook включён")
+	}
+
+	mon, err := monitor.New(cfg, apiClient, redisCache, bot, webhookClient, logger)
 	if err != nil {
 		logger.Fatalf("Ошибка монитора: %v", err)
 	}

@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[English version](README_en.md)
+[🇬🇧 English version](README_en.md)
 
 ## Возможности
 
@@ -27,6 +27,12 @@
 **Два режима работы:**
 - **Ручной** — только алерты с кнопками: сбросить подключения, отключить подписку, добавить в whitelist
 - **Автоматический** — автоотключение подписки на заданное время или перманентно, с автовосстановлением по таймеру
+
+**Webhook-уведомления:**
+- HTTP POST с полной информацией о нарушении (JSON)
+- Данные пользователя, IP-адреса, лимиты, счётчик нарушений
+- Опциональная авторизация через секретный заголовок (`X-Webhook-Secret`)
+- Работает в обоих режимах (manual и auto)
 
 **Гибкие настройки:**
 - Погрешность сверх лимита (tolerance)
@@ -100,7 +106,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 TELEGRAM_ADMIN_IDS=123456789
 ```
 
-### 4. Запустить 
+### 4. Запустить
 
 ```bash
 docker compose pull
@@ -141,6 +147,8 @@ docker compose up -d
 | `DEFAULT_DEVICE_LIMIT` | `0` | Лимит по умолчанию, если у пользователя не задан `hwidDeviceLimit`. 0 = не ограничивать |
 | `ACTION_MODE` | `manual` | `manual` — алерт с кнопками, `auto` — автоотключение подписки |
 | `AUTO_DISABLE_DURATION` | `0` | Длительность временного отключения в минутах. 0 = перманентное. В `manual` добавляет кнопку, в `auto` — задаёт время автовосстановления |
+| `WEBHOOK_URL` | — | URL для отправки webhook при нарушениях (POST JSON). Пусто = выключен |
+| `WEBHOOK_SECRET` | — | Секрет для заголовка `X-Webhook-Secret` (опционально) |
 | `WHITELIST_USER_IDS` | — | UUID для исключения из проверки (через запятую) |
 | `REDIS_URL` | `redis://redis:6379` | Адрес Redis |
 | `TIMEZONE` | `UTC` | Часовой пояс для timestamps в алертах (например `Europe/Moscow`) |
@@ -192,6 +200,68 @@ docker compose up -d
 Подписка отключается автоматически, бот отправляет информационный алерт с кнопкой "Включить подписку".
 
 Если `AUTO_DISABLE_DURATION > 0` — подписка автоматически восстанавливается по таймеру.
+
+## Webhook
+
+При обнаружении нарушения limiter может отправить HTTP POST запрос на указанный URL с полной информацией о событии. Webhook работает в обоих режимах (manual и auto).
+
+Для включения укажите `WEBHOOK_URL` в `.env`. Опционально можно задать `WEBHOOK_SECRET` — он будет передаваться в заголовке `X-Webhook-Secret` для верификации на принимающей стороне.
+
+**Пример payload:**
+
+```json
+{
+  "event": "violation_detected",
+  "action_mode": "auto",
+  "user": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "user_id": "123",
+    "username": "john",
+    "email": "john@example.com",
+    "telegram_id": 123456789,
+    "subscription_url": "https://panel.example.com/sub/abc"
+  },
+  "violation": {
+    "ips": [
+      {
+        "ip": "1.2.3.4",
+        "node_name": "DE-1",
+        "node_uuid": "node-uuid-1",
+        "last_seen": "2025-11-29T12:00:00Z"
+      },
+      {
+        "ip": "5.6.7.8",
+        "node_name": "US-1",
+        "node_uuid": "node-uuid-2",
+        "last_seen": "2025-11-29T12:01:00Z"
+      }
+    ],
+    "ip_count": 5,
+    "device_limit": 3,
+    "tolerance": 1,
+    "effective_limit": 4,
+    "violation_count_24h": 3
+  },
+  "action": {
+    "auto_disable_duration_min": 10
+  },
+  "timestamp": "2025-11-29T12:05:00Z"
+}
+```
+
+| Поле | Описание |
+|------|----------|
+| `event` | Всегда `violation_detected` |
+| `action_mode` | Режим работы: `manual` или `auto` |
+| `user` | Данные пользователя (UUID, username, email, telegram_id, subscription_url) |
+| `violation.ips` | Список активных IP с указанием ноды и времени последней активности |
+| `violation.ip_count` | Количество уникальных IP |
+| `violation.device_limit` | Лимит устройств пользователя |
+| `violation.tolerance` | Значение tolerance из конфига |
+| `violation.effective_limit` | Эффективный лимит (device_limit + tolerance) |
+| `violation.violation_count_24h` | Количество нарушений за последние 24 часа |
+| `action.auto_disable_duration_min` | Длительность блокировки в минутах (0 = перманентная) |
+| `timestamp` | Время обнаружения нарушения (ISO 8601) |
 
 ## FAQ
 

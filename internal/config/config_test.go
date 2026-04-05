@@ -16,6 +16,7 @@ func clearEnv() {
 		"REDIS_URL",
 		"TIMEZONE",
 		"LANGUAGE",
+		"WEBHOOK_URL", "WEBHOOK_SECRET",
 	}
 	for _, v := range vars {
 		os.Unsetenv(v)
@@ -127,6 +128,43 @@ func TestLoadConfig_Validation_InvalidActionMode(t *testing.T) {
 	_, err := LoadConfig("")
 	if err == nil {
 		t.Error("expected error for invalid ACTION_MODE, got nil")
+	}
+}
+
+func TestWebhookConfig(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+
+	os.Setenv("WEBHOOK_URL", "https://example.com/hook")
+	os.Setenv("WEBHOOK_SECRET", "secret123")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+
+	if cfg.WebhookURL != "https://example.com/hook" {
+		t.Errorf("expected WebhookURL https://example.com/hook, got %s", cfg.WebhookURL)
+	}
+	if cfg.WebhookSecret != "secret123" {
+		t.Errorf("expected WebhookSecret secret123, got %s", cfg.WebhookSecret)
+	}
+}
+
+func TestWebhookConfig_Defaults(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+
+	if cfg.WebhookURL != "" {
+		t.Errorf("expected empty WebhookURL by default, got %s", cfg.WebhookURL)
+	}
+	if cfg.WebhookSecret != "" {
+		t.Errorf("expected empty WebhookSecret by default, got %s", cfg.WebhookSecret)
 	}
 }
 

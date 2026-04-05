@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,6 +25,7 @@ type Client struct {
 	token      string
 	httpClient *http.Client
 	logger     *logrus.Logger
+	cookies    []*http.Cookie
 }
 
 func NewClient(baseURL, token string) *Client {
@@ -38,6 +40,33 @@ func NewClient(baseURL, token string) *Client {
 
 func (c *Client) SetLogger(logger *logrus.Logger) {
 	c.logger = logger
+}
+
+func (c *Client) SetCookies(cookies []*http.Cookie) {
+	c.cookies = cookies
+}
+
+func ParseCookies(cookieStr string) []*http.Cookie {
+	if cookieStr == "" {
+		return nil
+	}
+
+	var cookies []*http.Cookie
+	for _, part := range strings.Split(cookieStr, ";") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		cookies = append(cookies, &http.Cookie{
+			Name:  strings.TrimSpace(kv[0]),
+			Value: strings.TrimSpace(kv[1]),
+		})
+	}
+	return cookies
 }
 
 func (c *Client) logDebug(args ...interface{}) {
@@ -93,6 +122,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		}
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("Content-Type", "application/json")
+
+		for _, cookie := range c.cookies {
+			req.AddCookie(cookie)
+		}
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
