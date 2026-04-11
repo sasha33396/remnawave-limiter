@@ -151,6 +151,7 @@ All settings via `.env` file or environment variables.
 | `WEBHOOK_URL` | — | URL for sending webhooks on violations (POST JSON). Empty = disabled |
 | `WEBHOOK_SECRET` | — | Secret for `X-Webhook-Secret` header (optional) |
 | `WHITELIST_USER_IDS` | — | UUIDs to exclude from checks (comma-separated) |
+| `SUBNET_GROUPING` | `false` | Group IPs by /24 subnet (IPv4) and /48 (IPv6). When enabled, counts unique subnets instead of IPs — reduces false positives from CGNAT |
 | `REDIS_URL` | `redis://redis:6379` | Redis address |
 | `TIMEZONE` | `UTC` | Timezone for alert timestamps (e.g. `Europe/Moscow`) |
 | `LANGUAGE` | `ru` | Interface language: `ru` or `en` |
