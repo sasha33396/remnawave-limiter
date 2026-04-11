@@ -34,6 +34,7 @@ type ViolationPayload struct {
 	Tolerance         int         `json:"tolerance"`
 	EffectiveLimit    int         `json:"effective_limit"`
 	ViolationCount24h int64       `json:"violation_count_24h"`
+	SubnetCount       int         `json:"subnet_count,omitempty"`
 }
 
 type ActionPayload struct {

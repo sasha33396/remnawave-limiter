@@ -32,6 +32,7 @@ type Config struct {
 	RemnawaveCookies    string
 	WebhookURL          string
 	WebhookSecret       string
+	SubnetGrouping      bool
 }
 
 func LoadConfig(envPath string) (*Config, error) {
@@ -102,6 +103,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		RemnawaveCookies:    getEnv("REMNAWAVE_COOKIES", ""),
 		WebhookURL:          getEnv("WEBHOOK_URL", ""),
 		WebhookSecret:       getEnv("WEBHOOK_SECRET", ""),
+		SubnetGrouping:      getEnvBool("SUBNET_GROUPING", false),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -162,6 +164,13 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 			return defaultValue
 		}
 		return intVal
+	}
+	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		return strings.EqualFold(value, "true") || value == "1"
 	}
 	return defaultValue
 }

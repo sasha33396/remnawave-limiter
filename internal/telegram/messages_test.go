@@ -32,7 +32,7 @@ func TestFormatManualAlert(t *testing.T) {
 	}
 	limit := 3
 
-	result := FormatManualAlert(user, ips, limit, 5, loc)
+	result := FormatManualAlert(user, ips, limit, 5, loc, len(ips))
 
 	checks := []struct {
 		name string
@@ -78,7 +78,7 @@ func TestFormatAutoAlert(t *testing.T) {
 	limit := 2
 	duration := 30
 
-	result := FormatAutoAlert(user, ips, limit, duration, 3, loc)
+	result := FormatAutoAlert(user, ips, limit, duration, 3, loc, len(ips))
 
 	checks := []struct {
 		name string
@@ -112,7 +112,7 @@ func TestFormatAutoAlert_Permanent(t *testing.T) {
 		{IP: "7.7.7.7", NodeName: "Node-JP", NodeUUID: "n7"},
 	}
 
-	result := FormatAutoAlert(user, ips, 1, 0, 1, loc)
+	result := FormatAutoAlert(user, ips, 1, 0, 1, loc, len(ips))
 
 	if !strings.Contains(result, "Перманентно") {
 		t.Errorf("expected result to contain 'Перманентно' for duration=0, got:\n%s", result)
@@ -133,7 +133,7 @@ func TestFormatManualAlert_English(t *testing.T) {
 		{IP: "8.8.8.8", NodeName: "Node-US", NodeUUID: "n8"},
 	}
 
-	result := FormatManualAlert(user, ips, 2, 1, loc)
+	result := FormatManualAlert(user, ips, 2, 1, loc, len(ips))
 
 	checks := []struct {
 		name string

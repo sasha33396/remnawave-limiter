@@ -9,12 +9,16 @@ import (
 	"github.com/remnawave/limiter/internal/i18n"
 )
 
-func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, loc *time.Location) string {
+func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, loc *time.Location, deviceCount int) string {
 	var b strings.Builder
 
 	b.WriteString(i18n.T("alert.manual.title") + "\n\n")
 	b.WriteString(fmt.Sprintf("%s: <code>%s</code>\n", i18n.T("alert.user"), escapeHTML(user.Username)))
-	b.WriteString(fmt.Sprintf("%s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.detected_ips"), len(ips)))
+	if deviceCount < len(ips) {
+		b.WriteString(fmt.Sprintf("%s: %d | %s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.subnets"), deviceCount, i18n.T("alert.detected_ips"), len(ips)))
+	} else {
+		b.WriteString(fmt.Sprintf("%s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.detected_ips"), len(ips)))
+	}
 	b.WriteString(fmt.Sprintf("%s: %d\n", i18n.T("alert.violations_24h"), violationCount))
 	b.WriteString(fmt.Sprintf("🕐 %s\n", time.Now().In(loc).Format("02.01.2006 15:04:05")))
 
@@ -30,12 +34,16 @@ func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, viol
 	return b.String()
 }
 
-func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durationMinutes int, violationCount int64, loc *time.Location) string {
+func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durationMinutes int, violationCount int64, loc *time.Location, deviceCount int) string {
 	var b strings.Builder
 
 	b.WriteString(i18n.T("alert.auto.title") + "\n\n")
 	b.WriteString(fmt.Sprintf("%s: <code>%s</code>\n", i18n.T("alert.user"), escapeHTML(user.Username)))
-	b.WriteString(fmt.Sprintf("%s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.detected_ips"), len(ips)))
+	if deviceCount < len(ips) {
+		b.WriteString(fmt.Sprintf("%s: %d | %s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.subnets"), deviceCount, i18n.T("alert.detected_ips"), len(ips)))
+	} else {
+		b.WriteString(fmt.Sprintf("%s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.detected_ips"), len(ips)))
+	}
 	b.WriteString(fmt.Sprintf("%s: %d\n", i18n.T("alert.violations_24h"), violationCount))
 
 	if durationMinutes == 0 {

@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[English version](README_EN.md)
+[🇬🇧 English version](README_en.md)
 
 ## Возможности
 
@@ -150,6 +150,7 @@ docker compose up -d
 | `WEBHOOK_URL` | — | URL для отправки webhook при нарушениях (POST JSON). Пусто = выключен |
 | `WEBHOOK_SECRET` | — | Секрет для заголовка `X-Webhook-Secret` (опционально) |
 | `WHITELIST_USER_IDS` | — | UUID для исключения из проверки (через запятую) |
+| `SUBNET_GROUPING` | `false` | Группировка IP по подсети /24 (IPv4) и /48 (IPv6). При включении считаются уникальные подсети, а не IP — снижает ложные срабатывания от CGNAT |
 | `REDIS_URL` | `redis://redis:6379` | Адрес Redis |
 | `TIMEZONE` | `UTC` | Часовой пояс для timestamps в алертах (например `Europe/Moscow`) |
 | `LANGUAGE` | `ru` | Язык интерфейса: `ru` или `en` |

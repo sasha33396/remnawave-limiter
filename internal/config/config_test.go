@@ -17,6 +17,7 @@ func clearEnv() {
 		"TIMEZONE",
 		"LANGUAGE",
 		"WEBHOOK_URL", "WEBHOOK_SECRET",
+		"SUBNET_GROUPING",
 	}
 	for _, v := range vars {
 		os.Unsetenv(v)
@@ -191,5 +192,35 @@ func TestParseInt64List_Empty(t *testing.T) {
 	}
 	if len(result) != 0 {
 		t.Errorf("len = %d, want 0", len(result))
+	}
+}
+
+func TestLoadConfig_SubnetGrouping_Default(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.SubnetGrouping != false {
+		t.Errorf("SubnetGrouping = %v, want false", cfg.SubnetGrouping)
+	}
+}
+
+func TestLoadConfig_SubnetGrouping_Enabled(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("SUBNET_GROUPING", "true")
+	defer os.Unsetenv("SUBNET_GROUPING")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.SubnetGrouping != true {
+		t.Errorf("SubnetGrouping = %v, want true", cfg.SubnetGrouping)
 	}
 }

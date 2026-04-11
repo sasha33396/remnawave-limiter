@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -150,6 +151,15 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		uniqueIPs = append(uniqueIPs, ip)
 	}
 
+	deviceCount := len(uniqueIPs)
+	if m.config.SubnetGrouping {
+		subnets := make(map[string]struct{})
+		for _, ip := range uniqueIPs {
+			subnets[subnetPrefix(ip.IP)] = struct{}{}
+		}
+		deviceCount = len(subnets)
+	}
+
 	whitelisted, err := m.cache.IsWhitelisted(ctx, userID)
 	if err != nil {
 		m.logger.WithError(err).WithField("userID", userID).Error("Ошибка проверки whitelist")
@@ -170,7 +180,7 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		return
 	}
 
-	if len(uniqueIPs) <= limit+m.config.Tolerance {
+	if deviceCount <= limit+m.config.Tolerance {
 		return
 	}
 
@@ -197,16 +207,17 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		"userID":     userID,
 		"username":   user.Username,
 		"ips":        len(uniqueIPs),
+		"devices":    deviceCount,
 		"limit":      limit,
 		"violations": violationCount,
 	}).Warn(i18n.T("log.limit_exceeded"))
 
-	m.sendWebhook(ctx, user, uniqueIPs, limit, violationCount)
+	m.sendWebhook(ctx, user, uniqueIPs, limit, violationCount, deviceCount)
 
 	if m.config.ActionMode == "auto" {
-		m.handleAutoAction(ctx, user, uniqueIPs, limit, violationCount)
+		m.handleAutoAction(ctx, user, uniqueIPs, limit, violationCount, deviceCount)
 	} else {
-		m.handleManualAction(user, uniqueIPs, limit, violationCount)
+		m.handleManualAction(user, uniqueIPs, limit, violationCount, deviceCount)
 	}
 }
 
@@ -262,14 +273,14 @@ func (m *Monitor) resolveLimit(hwidDeviceLimit int) int {
 	return hwidDeviceLimit
 }
 
-func (m *Monitor) handleManualAction(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64) {
-	text := telegram.FormatManualAlert(user, ips, limit, violationCount, m.location)
+func (m *Monitor) handleManualAction(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, deviceCount int) {
+	text := telegram.FormatManualAlert(user, ips, limit, violationCount, m.location, deviceCount)
 	if err := m.bot.SendManualAlert(text, user.UUID, user.UserID, m.config.AutoDisableDuration); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отправки manual alert")
 	}
 }
 
-func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64) {
+func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, deviceCount int) {
 	if err := m.api.DisableUser(ctx, user.UUID); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отключения пользователя")
 		return
@@ -282,13 +293,13 @@ func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ip
 		}
 	}
 
-	text := telegram.FormatAutoAlert(user, ips, limit, m.config.AutoDisableDuration, violationCount, m.location)
+	text := telegram.FormatAutoAlert(user, ips, limit, m.config.AutoDisableDuration, violationCount, m.location, deviceCount)
 	if err := m.bot.SendAutoAlert(text, user.UUID); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отправки auto alert")
 	}
 }
 
-func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64) {
+func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, deviceCount int) {
 	if m.webhook == nil {
 		return
 	}
@@ -321,6 +332,7 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 			Tolerance:         m.config.Tolerance,
 			EffectiveLimit:    limit + m.config.Tolerance,
 			ViolationCount24h: violationCount,
+			SubnetCount:       deviceCount,
 		},
 		Action: webhook.ActionPayload{
 			AutoDisableDurationMin: m.config.AutoDisableDuration,
@@ -329,6 +341,23 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 	}
 
 	m.webhook.Send(ctx, payload)
+}
+
+func subnetPrefix(ipStr string) string {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return ipStr
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		masked := net.IPv4(ip4[0], ip4[1], ip4[2], 0)
+		return masked.String() + "/24"
+	}
+	masked := make(net.IP, len(ip))
+	copy(masked, ip)
+	for i := 6; i < 16; i++ {
+		masked[i] = 0
+	}
+	return masked.String() + "/48"
 }
 
 func (m *Monitor) restoreLoop(ctx context.Context) {
