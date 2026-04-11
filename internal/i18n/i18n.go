@@ -15,6 +15,7 @@ var translations = map[string]map[string]string{
 		"alert.permanent":       "Перманентно",
 		"alert.ips_header":      "📍 IP-адреса",
 		"alert.node":            "нода",
+		"alert.and_more":        "и ещё",
 		"alert.profile":         "🔗 Профиль",
 
 		"action.drop":           "✅ Подключения сброшены",
@@ -78,6 +79,7 @@ var translations = map[string]map[string]string{
 		"alert.permanent":       "Permanently",
 		"alert.ips_header":      "📍 IP addresses",
 		"alert.node":            "node",
+		"alert.and_more":        "and more",
 		"alert.profile":         "🔗 Profile",
 
 		"action.drop":           "✅ Connections dropped",

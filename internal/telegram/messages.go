@@ -23,7 +23,12 @@ func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, viol
 	b.WriteString(fmt.Sprintf("🕐 %s\n", time.Now().In(loc).Format("02.01.2006 15:04:05")))
 
 	b.WriteString(fmt.Sprintf("\n%s:\n", i18n.T("alert.ips_header")))
-	for _, ip := range ips {
+	maxIPs := 10
+	for i, ip := range ips {
+		if i >= maxIPs {
+			b.WriteString(fmt.Sprintf("  … %s %d\n", i18n.T("alert.and_more"), len(ips)-maxIPs))
+			break
+		}
 		b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (%s: %s)\n", ip.IP, escapeHTML(ip.IP), i18n.T("alert.node"), escapeHTML(ip.NodeName)))
 	}
 
@@ -55,7 +60,12 @@ func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durati
 	b.WriteString(fmt.Sprintf("🕐 %s\n", time.Now().In(loc).Format("02.01.2006 15:04:05")))
 
 	b.WriteString(fmt.Sprintf("\n%s:\n", i18n.T("alert.ips_header")))
-	for _, ip := range ips {
+	maxIPs := 10
+	for i, ip := range ips {
+		if i >= maxIPs {
+			b.WriteString(fmt.Sprintf("  … %s %d\n", i18n.T("alert.and_more"), len(ips)-maxIPs))
+			break
+		}
 		b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (%s: %s)\n", ip.IP, escapeHTML(ip.IP), i18n.T("alert.node"), escapeHTML(ip.NodeName)))
 	}
 
