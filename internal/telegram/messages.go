@@ -107,6 +107,51 @@ func FormatDuration(minutes int) string {
 	return fmt.Sprintf("%d %s %d %s %d %s", days, i18n.T("duration.day"), remHours, i18n.T("duration.hour"), mins, i18n.T("duration.min"))
 }
 
+func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, tolerance, defaultDeviceLimit, autoDisableDuration int, webhookEnabled, subnetGrouping bool, violationThreshold, violationThresholdWindow int) string {
+	var b strings.Builder
+
+	b.WriteString(i18n.T("startup.title") + "\n\n")
+	b.WriteString(fmt.Sprintf("📦 %s: <code>%s</code>\n", i18n.T("startup.version"), version))
+
+	mode := i18n.T("startup.mode_manual")
+	if actionMode == "auto" {
+		mode = i18n.T("startup.mode_auto")
+	}
+	b.WriteString(fmt.Sprintf("⚙️ %s: %s\n", i18n.T("startup.mode"), mode))
+	b.WriteString(fmt.Sprintf("⏱ %s: %d%s\n", i18n.T("startup.interval"), checkInterval, i18n.T("startup.sec")))
+	b.WriteString(fmt.Sprintf("🕐 %s: %d%s\n", i18n.T("startup.cooldown"), cooldown, i18n.T("startup.sec")))
+	b.WriteString(fmt.Sprintf("📊 %s: %d\n", i18n.T("startup.tolerance"), tolerance))
+
+	if defaultDeviceLimit == 0 {
+		b.WriteString(fmt.Sprintf("📱 %s: %s\n", i18n.T("startup.default_limit"), i18n.T("startup.unlimited")))
+	} else {
+		b.WriteString(fmt.Sprintf("📱 %s: %d\n", i18n.T("startup.default_limit"), defaultDeviceLimit))
+	}
+
+	if autoDisableDuration > 0 {
+		b.WriteString(fmt.Sprintf("🔒 %s: %s\n", i18n.T("startup.auto_disable"), FormatDuration(autoDisableDuration)))
+	}
+
+	webhookStatus := i18n.T("startup.disabled")
+	if webhookEnabled {
+		webhookStatus = i18n.T("startup.enabled")
+	}
+	b.WriteString(fmt.Sprintf("🔗 %s: %s\n", i18n.T("startup.webhook"), webhookStatus))
+
+	subnetStatus := i18n.T("startup.disabled")
+	if subnetGrouping {
+		subnetStatus = i18n.T("startup.enabled")
+	}
+	b.WriteString(fmt.Sprintf("🌐 %s: %s\n", i18n.T("startup.subnet_grouping"), subnetStatus))
+
+	if violationThreshold > 1 {
+		b.WriteString(fmt.Sprintf("🚦 %s: %d\n", i18n.T("startup.violation_threshold"), violationThreshold))
+		b.WriteString(fmt.Sprintf("🕐 %s: %d%s\n", i18n.T("startup.threshold_window"), violationThresholdWindow, i18n.T("startup.sec")))
+	}
+
+	return b.String()
+}
+
 func escapeHTML(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")

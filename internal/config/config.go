@@ -32,7 +32,9 @@ type Config struct {
 	RemnawaveCookies    string
 	WebhookURL          string
 	WebhookSecret       string
-	SubnetGrouping      bool
+	SubnetGrouping         bool
+	ViolationThreshold     int
+	ViolationThresholdWindow int
 }
 
 func LoadConfig(envPath string) (*Config, error) {
@@ -103,7 +105,9 @@ func LoadConfig(envPath string) (*Config, error) {
 		RemnawaveCookies:    getEnv("REMNAWAVE_COOKIES", ""),
 		WebhookURL:          getEnv("WEBHOOK_URL", ""),
 		WebhookSecret:       getEnv("WEBHOOK_SECRET", ""),
-		SubnetGrouping:      getEnvBool("SUBNET_GROUPING", false),
+		SubnetGrouping:         getEnvBool("SUBNET_GROUPING", false),
+		ViolationThreshold:     getEnvInt("VIOLATION_THRESHOLD", 1),
+		ViolationThresholdWindow: getEnvInt("VIOLATION_THRESHOLD_WINDOW", 3600),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -125,6 +129,12 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.Cooldown <= 0 {
 		return fmt.Errorf("COOLDOWN должен быть > 0, получено %d", cfg.Cooldown)
+	}
+	if cfg.ViolationThreshold <= 0 {
+		return fmt.Errorf("VIOLATION_THRESHOLD должен быть > 0, получено %d", cfg.ViolationThreshold)
+	}
+	if cfg.ViolationThresholdWindow <= 0 {
+		return fmt.Errorf("VIOLATION_THRESHOLD_WINDOW должен быть > 0, получено %d", cfg.ViolationThresholdWindow)
 	}
 	return nil
 }

@@ -104,6 +104,23 @@ func main() {
 		return nil
 	})
 
+	startupMsg := telegram.FormatStartupMessage(
+		version.Version,
+		cfg.ActionMode,
+		cfg.CheckInterval,
+		cfg.Cooldown,
+		cfg.Tolerance,
+		cfg.DefaultDeviceLimit,
+		cfg.AutoDisableDuration,
+		cfg.WebhookURL != "",
+		cfg.SubnetGrouping,
+		cfg.ViolationThreshold,
+		cfg.ViolationThresholdWindow,
+	)
+	if err := bot.SendMessage(startupMsg); err != nil {
+		logger.WithError(err).Warn("Не удалось отправить стартовое сообщение в Telegram")
+	}
+
 	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 

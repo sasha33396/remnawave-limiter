@@ -6,7 +6,7 @@ Automatic monitoring of simultaneous user connections from the Remnawave panel. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[🇷🇺 Русская версия](README.md)
+[Русская версия](README.md)
 
 ## Features
 
@@ -33,6 +33,11 @@ Automatic monitoring of simultaneous user connections from the Remnawave panel. 
 - User data, IP addresses, limits, violation counter
 - Optional authorization via secret header (`X-Webhook-Secret`)
 - Works in both modes (manual and auto)
+
+**Violation threshold:**
+- Configurable threshold — action only after N violations within a given period
+- Protection against false positives from brief limit spikes
+- With `VIOLATION_THRESHOLD=1` — instant reaction (default behavior)
 
 **Flexible settings:**
 - Tolerance above the limit
@@ -66,7 +71,8 @@ Automatic monitoring of simultaneous user connections from the Remnawave panel. 
 3. Aggregates IPs per user across all nodes
 4. Filters by last activity time (`lastSeen`)
 5. Compares active IP count against the limit + tolerance
-6. On violation — reacts depending on the mode (alert or auto-block)
+6. On violation — increments the threshold counter
+7. If threshold is reached — reacts depending on the mode (alert or auto-block)
 
 ## Requirements
 
@@ -151,6 +157,8 @@ All settings via `.env` file or environment variables.
 | `WEBHOOK_URL` | — | URL for sending webhooks on violations (POST JSON). Empty = disabled |
 | `WEBHOOK_SECRET` | — | Secret for `X-Webhook-Secret` header (optional) |
 | `WHITELIST_USER_IDS` | — | UUIDs to exclude from checks (comma-separated) |
+| `VIOLATION_THRESHOLD` | `1` | Number of violations required before taking action. 1 = instant reaction |
+| `VIOLATION_THRESHOLD_WINDOW` | `3600` | Time window in seconds for counting violations. Counter resets if no new violations occur within this period |
 | `SUBNET_GROUPING` | `false` | Group IPs by /24 subnet (IPv4) and /48 (IPv6). When enabled, counts unique subnets instead of IPs — reduces false positives from CGNAT |
 | `REDIS_URL` | `redis://redis:6379` | Redis address |
 | `TIMEZONE` | `UTC` | Timezone for alert timestamps (e.g. `Europe/Moscow`) |
@@ -163,6 +171,30 @@ All settings via `.env` file or environment variables.
 | `> 0` | Used as the device limit |
 | `null` | Uses `DEFAULT_DEVICE_LIMIT` from config |
 | `0` | No limit — user is skipped |
+
+## Violation threshold
+
+By default (`VIOLATION_THRESHOLD=1`) the limiter reacts to every detected violation. When the threshold is increased, the action (alert or auto-block) is only triggered after the required number of violations accumulates within the time window.
+
+### How it works
+
+1. Limit exceeded → cooldown is checked
+2. Threshold counter is incremented (TTL = `VIOLATION_THRESHOLD_WINDOW`)
+3. If counter < `VIOLATION_THRESHOLD` → logged, no action taken
+4. If counter >= `VIOLATION_THRESHOLD` → action is triggered, counter resets
+
+### Example
+
+With `VIOLATION_THRESHOLD=3`, `VIOLATION_THRESHOLD_WINDOW=3600`, `COOLDOWN=300`:
+
+| Time | Event | Counter | Action |
+|:---:|-------|:---:|--------|
+| 12:00 | Violation | 1/3 | Logged, no action |
+| 12:05 | Violation | 2/3 | Logged, no action |
+| 12:10 | Violation | 3/3 | Alert/block, counter reset |
+| 12:15 | Violation | 1/3 | Logged, no action |
+
+If more than `VIOLATION_THRESHOLD_WINDOW` seconds pass between violations, the counter resets automatically.
 
 ## Telegram bot
 

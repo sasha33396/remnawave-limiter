@@ -203,6 +203,28 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		violationCount = 1
 	}
 
+	thresholdWindow := time.Duration(m.config.ViolationThresholdWindow) * time.Second
+	thresholdCount, err := m.cache.IncrThresholdCount(ctx, userID, thresholdWindow)
+	if err != nil {
+		m.logger.WithError(err).WithField("userID", userID).Error("Ошибка инкремента порогового счётчика")
+		thresholdCount = 1
+	}
+
+	if thresholdCount < int64(m.config.ViolationThreshold) {
+		m.logger.WithFields(logrus.Fields{
+			"userID":    userID,
+			"username":  user.Username,
+			"devices":   deviceCount,
+			"limit":     limit,
+			"threshold": fmt.Sprintf("%d/%d", thresholdCount, m.config.ViolationThreshold),
+		}).Warn(i18n.T("log.threshold_not_reached"))
+		return
+	}
+
+	if err := m.cache.ResetThresholdCount(ctx, userID); err != nil {
+		m.logger.WithError(err).WithField("userID", userID).Error("Ошибка сброса порогового счётчика")
+	}
+
 	m.logger.WithFields(logrus.Fields{
 		"userID":     userID,
 		"username":   user.Username,

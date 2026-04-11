@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	prefixUser           = "user:"
-	prefixCooldown       = "cooldown:"
-	prefixViolationCount = "violations:count:"
-	keyWhitelist         = "whitelist"
-	keyRestoreQ          = "restore:queue"
+	prefixUser               = "user:"
+	prefixCooldown           = "cooldown:"
+	prefixViolationCount     = "violations:count:"
+	prefixViolationThreshold = "violations:threshold:"
+	keyWhitelist             = "whitelist"
+	keyRestoreQ              = "restore:queue"
 )
 
 type Cache struct {
@@ -147,4 +148,18 @@ func (c *Cache) GetViolationCount(ctx context.Context, userID string) (int64, er
 		return 0, fmt.Errorf("get violation count: %w", err)
 	}
 	return count, nil
+}
+
+func (c *Cache) IncrThresholdCount(ctx context.Context, userID string, window time.Duration) (int64, error) {
+	key := prefixViolationThreshold + userID
+	count, err := c.client.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, fmt.Errorf("incr threshold count: %w", err)
+	}
+	c.client.Expire(ctx, key, window)
+	return count, nil
+}
+
+func (c *Cache) ResetThresholdCount(ctx context.Context, userID string) error {
+	return c.client.Del(ctx, prefixViolationThreshold+userID).Err()
 }
