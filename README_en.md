@@ -77,7 +77,7 @@ Automatic monitoring of simultaneous user connections from the Remnawave panel. 
 ## Requirements
 
 - Docker and Docker Compose
-- Remnawave panel with an API token
+- Remnawave 2.7.0+ panel with an API token
 - Telegram bot (create via [@BotFather](https://t.me/BotFather))
 
 ## Installation

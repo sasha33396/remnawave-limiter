@@ -77,7 +77,7 @@
 ## Требования
 
 - Docker и Docker Compose
-- Remnawave панель с API-токеном
+- Remnawave 2.7.0+ панель с API-токеном
 - Telegram-бот (создать через [@BotFather](https://t.me/BotFather))
 
 ## Установка
