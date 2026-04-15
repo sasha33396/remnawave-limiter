@@ -110,6 +110,7 @@ func main() {
 		cfg.CheckInterval,
 		cfg.Cooldown,
 		cfg.Tolerance,
+		cfg.ToleranceMultiplier,
 		cfg.DefaultDeviceLimit,
 		cfg.AutoDisableDuration,
 		cfg.WebhookURL != "",

@@ -16,6 +16,7 @@ type Config struct {
 	CheckInterval       int
 	ActiveIPWindow      int
 	Tolerance           int
+	ToleranceMultiplier float64
 	Cooldown            int
 	UserCacheTTL        int
 	DefaultDeviceLimit  int
@@ -89,6 +90,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		CheckInterval:       getEnvInt("CHECK_INTERVAL", 30),
 		ActiveIPWindow:      getEnvInt("ACTIVE_IP_WINDOW", 300),
 		Tolerance:           getEnvInt("TOLERANCE", 0),
+		ToleranceMultiplier: getEnvFloat64("TOLERANCE_MULTIPLIER", 0),
 		Cooldown:            getEnvInt("COOLDOWN", 300),
 		UserCacheTTL:        getEnvInt("USER_CACHE_TTL", 600),
 		DefaultDeviceLimit:  getEnvInt("DEFAULT_DEVICE_LIMIT", 0),
@@ -174,6 +176,22 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 			return defaultValue
 		}
 		return intVal
+	}
+	return defaultValue
+}
+
+func getEnvFloat64(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		floatVal, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"key":     key,
+				"value":   value,
+				"default": defaultValue,
+			}).Warnf("Не удалось преобразовать %s в число, используется значение по умолчанию %v", key, defaultValue)
+			return defaultValue
+		}
+		return floatVal
 	}
 	return defaultValue
 }

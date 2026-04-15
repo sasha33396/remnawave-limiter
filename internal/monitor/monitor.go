@@ -180,7 +180,8 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		return
 	}
 
-	if deviceCount <= limit+m.config.Tolerance {
+	effectiveTolerance := m.config.Tolerance + int(float64(limit)*m.config.ToleranceMultiplier)
+	if deviceCount <= limit+effectiveTolerance {
 		return
 	}
 
@@ -336,6 +337,8 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 		}
 	}
 
+	effectiveTolerance := m.config.Tolerance + int(float64(limit)*m.config.ToleranceMultiplier)
+
 	payload := &webhook.Payload{
 		Event:      "violation_detected",
 		ActionMode: m.config.ActionMode,
@@ -351,8 +354,8 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 			IPs:               ipPayloads,
 			IPCount:           len(ips),
 			DeviceLimit:       limit,
-			Tolerance:         m.config.Tolerance,
-			EffectiveLimit:    limit + m.config.Tolerance,
+			Tolerance:         effectiveTolerance,
+			EffectiveLimit:    limit + effectiveTolerance,
 			ViolationCount24h: violationCount,
 			SubnetCount:       deviceCount,
 		},

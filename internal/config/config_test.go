@@ -8,7 +8,7 @@ import (
 func clearEnv() {
 	vars := []string{
 		"REMNAWAVE_API_URL", "REMNAWAVE_API_TOKEN",
-		"CHECK_INTERVAL", "ACTIVE_IP_WINDOW", "TOLERANCE", "COOLDOWN",
+		"CHECK_INTERVAL", "ACTIVE_IP_WINDOW", "TOLERANCE", "TOLERANCE_MULTIPLIER", "COOLDOWN",
 		"USER_CACHE_TTL", "DEFAULT_DEVICE_LIMIT",
 		"ACTION_MODE", "AUTO_DISABLE_DURATION",
 		"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_THREAD_ID", "TELEGRAM_ADMIN_IDS",
@@ -65,6 +65,9 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	}
 	if cfg.Tolerance != 0 {
 		t.Errorf("Tolerance = %d, want 0", cfg.Tolerance)
+	}
+	if cfg.ToleranceMultiplier != 0 {
+		t.Errorf("ToleranceMultiplier = %f, want 0", cfg.ToleranceMultiplier)
 	}
 	if cfg.Cooldown != 300 {
 		t.Errorf("Cooldown = %d, want 300", cfg.Cooldown)

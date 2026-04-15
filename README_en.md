@@ -148,7 +148,8 @@ All settings via `.env` file or environment variables.
 | `TELEGRAM_THREAD_ID` | — | Thread/topic ID in a supergroup |
 | `CHECK_INTERVAL` | `30` | Check interval (seconds) |
 | `ACTIVE_IP_WINDOW` | `300` | IP is considered active if `lastSeen` < this value (seconds) |
-| `TOLERANCE` | `0` | Allowed excess over the limit. If limit is 3 and tolerance is 1, reaction at 5+ IPs |
+| `TOLERANCE` | `0` | Fixed allowed excess over the limit. If limit is 3 and tolerance is 1, reaction at 5+ IPs |
+| `TOLERANCE_MULTIPLIER` | `0` | Proportional tolerance multiplier. Effective tolerance = `TOLERANCE + floor(limit × TOLERANCE_MULTIPLIER)`. Set to 0 to disable |
 | `COOLDOWN` | `300` | Cooldown between alerts for one user (seconds) |
 | `USER_CACHE_TTL` | `600` | User data cache TTL (seconds) |
 | `DEFAULT_DEVICE_LIMIT` | `0` | Default limit if user has no `hwidDeviceLimit`. 0 = no limit |

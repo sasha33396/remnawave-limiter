@@ -117,7 +117,7 @@ func FormatDuration(minutes int) string {
 	return fmt.Sprintf("%d %s %d %s %d %s", days, i18n.T("duration.day"), remHours, i18n.T("duration.hour"), mins, i18n.T("duration.min"))
 }
 
-func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, tolerance, defaultDeviceLimit, autoDisableDuration int, webhookEnabled, subnetGrouping bool, violationThreshold, violationThresholdWindow int) string {
+func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, tolerance int, toleranceMultiplier float64, defaultDeviceLimit, autoDisableDuration int, webhookEnabled, subnetGrouping bool, violationThreshold, violationThresholdWindow int) string {
 	var b strings.Builder
 
 	b.WriteString(i18n.T("startup.title") + "\n\n")
@@ -131,6 +131,9 @@ func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, t
 	b.WriteString(fmt.Sprintf("⏱ %s: %d%s\n", i18n.T("startup.interval"), checkInterval, i18n.T("startup.sec")))
 	b.WriteString(fmt.Sprintf("🕐 %s: %d%s\n", i18n.T("startup.cooldown"), cooldown, i18n.T("startup.sec")))
 	b.WriteString(fmt.Sprintf("📊 %s: %d\n", i18n.T("startup.tolerance"), tolerance))
+	if toleranceMultiplier > 0 {
+		b.WriteString(fmt.Sprintf("📊 %s: %.2f\n", i18n.T("startup.tolerance_mult"), toleranceMultiplier))
+	}
 
 	if defaultDeviceLimit == 0 {
 		b.WriteString(fmt.Sprintf("📱 %s: %s\n", i18n.T("startup.default_limit"), i18n.T("startup.unlimited")))
