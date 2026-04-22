@@ -8,4 +8,5 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /bin/remnawave-limiter ./cmd/limi
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /bin/remnawave-limiter /usr/local/bin/remnawave-limiter
+WORKDIR /app
 ENTRYPOINT ["remnawave-limiter"]

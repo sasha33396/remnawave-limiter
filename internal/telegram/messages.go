@@ -9,28 +9,19 @@ import (
 	"github.com/remnawave/limiter/internal/i18n"
 )
 
-func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, loc *time.Location, deviceCount int) string {
+const asnOrgMaxLen = 40
+
+func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, loc *time.Location, subnetGroups int, subnetEnabled bool) string {
 	var b strings.Builder
 
 	b.WriteString(i18n.T("alert.manual.title") + "\n\n")
 	b.WriteString(fmt.Sprintf("%s: <code>%s</code>\n", i18n.T("alert.user"), escapeHTML(user.Username)))
-	if deviceCount < len(ips) {
-		b.WriteString(fmt.Sprintf("%s: %d | %s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.subnets"), deviceCount, i18n.T("alert.detected_ips"), len(ips)))
-	} else {
-		b.WriteString(fmt.Sprintf("%s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.detected_ips"), len(ips)))
-	}
+	b.WriteString(formatGroupingLine(limit, subnetGroups, len(ips), countUniqueASN(ips), subnetEnabled))
 	b.WriteString(fmt.Sprintf("%s: %d\n", i18n.T("alert.violations_24h"), violationCount))
 	b.WriteString(fmt.Sprintf("🕐 %s\n", time.Now().In(loc).Format("02.01.2006 15:04:05")))
 
 	b.WriteString(fmt.Sprintf("\n%s:\n", i18n.T("alert.ips_header")))
-	maxIPs := 10
-	for i, ip := range ips {
-		if i >= maxIPs {
-			b.WriteString(fmt.Sprintf("  … %s %d\n", i18n.T("alert.and_more"), len(ips)-maxIPs))
-			break
-		}
-		b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (%s: %s)\n", ip.IP, escapeHTML(ip.IP), i18n.T("alert.node"), escapeHTML(ip.NodeName)))
-	}
+	writeIPList(&b, ips)
 
 	if user.SubscriptionURL != "" {
 		b.WriteString(fmt.Sprintf("\n<a href=\"%s\">%s</a>", escapeHTML(user.SubscriptionURL), i18n.T("alert.profile")))
@@ -39,16 +30,12 @@ func FormatManualAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, viol
 	return b.String()
 }
 
-func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durationMinutes int, violationCount int64, loc *time.Location, deviceCount int) string {
+func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit, durationMinutes int, violationCount int64, loc *time.Location, subnetGroups int, subnetEnabled bool) string {
 	var b strings.Builder
 
 	b.WriteString(i18n.T("alert.auto.title") + "\n\n")
 	b.WriteString(fmt.Sprintf("%s: <code>%s</code>\n", i18n.T("alert.user"), escapeHTML(user.Username)))
-	if deviceCount < len(ips) {
-		b.WriteString(fmt.Sprintf("%s: %d | %s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.subnets"), deviceCount, i18n.T("alert.detected_ips"), len(ips)))
-	} else {
-		b.WriteString(fmt.Sprintf("%s: %d | %s: %d IP\n", i18n.T("alert.limit"), limit, i18n.T("alert.detected_ips"), len(ips)))
-	}
+	b.WriteString(formatGroupingLine(limit, subnetGroups, len(ips), countUniqueASN(ips), subnetEnabled))
 	b.WriteString(fmt.Sprintf("%s: %d\n", i18n.T("alert.violations_24h"), violationCount))
 
 	if durationMinutes == 0 {
@@ -60,16 +47,46 @@ func FormatAutoAlert(user *api.CachedUser, ips []api.ActiveIP, limit int, durati
 	b.WriteString(fmt.Sprintf("🕐 %s\n", time.Now().In(loc).Format("02.01.2006 15:04:05")))
 
 	b.WriteString(fmt.Sprintf("\n%s:\n", i18n.T("alert.ips_header")))
-	maxIPs := 10
+	writeIPList(&b, ips)
+
+	return b.String()
+}
+
+func writeIPList(b *strings.Builder, ips []api.ActiveIP) {
+	const maxIPs = 10
 	for i, ip := range ips {
 		if i >= maxIPs {
 			b.WriteString(fmt.Sprintf("  … %s %d\n", i18n.T("alert.and_more"), len(ips)-maxIPs))
-			break
+			return
 		}
-		b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (%s: %s)\n", ip.IP, escapeHTML(ip.IP), i18n.T("alert.node"), escapeHTML(ip.NodeName)))
+		org := strings.TrimSpace(ip.ASNOrg)
+		if org != "" {
+			b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> - %s (%s)\n",
+				ip.IP, escapeHTML(ip.IP), escapeHTML(truncateASNOrg(org)), escapeHTML(ip.NodeName)))
+		} else {
+			b.WriteString(fmt.Sprintf("  • <a href=\"https://ipinfo.io/%s\">%s</a> (%s)\n",
+				ip.IP, escapeHTML(ip.IP), escapeHTML(ip.NodeName)))
+		}
 	}
+}
 
-	return b.String()
+func truncateASNOrg(s string) string {
+	if len(s) <= asnOrgMaxLen {
+		return s
+	}
+	cut := strings.TrimRight(s[:asnOrgMaxLen-1], " ")
+	return cut + "…"
+}
+
+func countUniqueASN(ips []api.ActiveIP) int {
+	seen := make(map[uint32]struct{})
+	for _, ip := range ips {
+		if ip.ASN == 0 {
+			continue
+		}
+		seen[ip.ASN] = struct{}{}
+	}
+	return len(seen)
 }
 
 func FormatActionResult(action, adminName, username string) string {
@@ -83,6 +100,8 @@ func FormatActionResult(action, adminName, username string) string {
 		msg = i18n.T("action.disable_temp")
 	case "ignore":
 		msg = i18n.T("action.ignore")
+	case "ignore_temp":
+		msg = i18n.T("action.ignore_temp")
 	case "enable":
 		msg = i18n.T("action.enable")
 	default:
@@ -117,7 +136,7 @@ func FormatDuration(minutes int) string {
 	return fmt.Sprintf("%d %s %d %s %d %s", days, i18n.T("duration.day"), remHours, i18n.T("duration.hour"), mins, i18n.T("duration.min"))
 }
 
-func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, tolerance int, toleranceMultiplier float64, defaultDeviceLimit, autoDisableDuration int, webhookEnabled, subnetGrouping bool, violationThreshold, violationThresholdWindow int) string {
+func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, tolerance int, toleranceMultiplier float64, defaultDeviceLimit, autoDisableDuration int, webhookEnabled, subnetGrouping bool, subnetPrefixV4 int, maxmindLoaded bool, violationThreshold, violationThresholdWindow int) string {
 	var b strings.Builder
 
 	b.WriteString(i18n.T("startup.title") + "\n\n")
@@ -156,6 +175,15 @@ func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, t
 		subnetStatus = i18n.T("startup.enabled")
 	}
 	b.WriteString(fmt.Sprintf("🌐 %s: %s\n", i18n.T("startup.subnet_grouping"), subnetStatus))
+	if subnetGrouping {
+		b.WriteString(fmt.Sprintf("  ↳ /%d\n", subnetPrefixV4))
+	}
+
+	maxmindStatus := i18n.T("startup.maxmind_unavailable")
+	if maxmindLoaded {
+		maxmindStatus = i18n.T("startup.maxmind_loaded")
+	}
+	b.WriteString(fmt.Sprintf("🌍 %s: %s\n", i18n.T("startup.maxmind"), maxmindStatus))
 
 	if violationThreshold > 1 {
 		b.WriteString(fmt.Sprintf("🚦 %s: %d\n", i18n.T("startup.violation_threshold"), violationThreshold))
@@ -163,6 +191,26 @@ func FormatStartupMessage(version, actionMode string, checkInterval, cooldown, t
 	}
 
 	return b.String()
+}
+
+func formatGroupingLine(limit, subnetGroups, ipCount, asnCount int, subnetEnabled bool) string {
+	var base string
+	if subnetEnabled && subnetGroups > 0 && subnetGroups < ipCount {
+		base = fmt.Sprintf("%s: %d | %s: %d | %s: %d IP",
+			i18n.T("alert.limit"), limit,
+			i18n.T("alert.subnets"), subnetGroups,
+			i18n.T("alert.detected_ips"), ipCount)
+	} else {
+		base = fmt.Sprintf("%s: %d | %s: %d IP",
+			i18n.T("alert.limit"), limit,
+			i18n.T("alert.detected_ips"), ipCount)
+	}
+
+	if asnCount > 0 {
+		base += fmt.Sprintf(" (%d %s)", asnCount, i18n.T("alert.asn_count"))
+	}
+
+	return base + "\n"
 }
 
 func escapeHTML(s string) string {

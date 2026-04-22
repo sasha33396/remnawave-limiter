@@ -67,7 +67,7 @@ func (b *Bot) sendMsg(text string, keyboard *telego.InlineKeyboardMarkup) error 
 	return nil
 }
 
-func (b *Bot) SendManualAlert(text string, userUUID string, userID string, disableDuration int) error {
+func (b *Bot) SendManualAlert(text string, userUUID string, userID string, disableDuration int, ignoreDuration int) error {
 	rows := [][]telego.InlineKeyboardButton{
 		{
 			tu.InlineKeyboardButton(i18n.T("button.drop")).WithCallbackData(fmt.Sprintf("drop:%s:%s", userUUID, userID)),
@@ -82,9 +82,16 @@ func (b *Bot) SendManualAlert(text string, userUUID string, userID string, disab
 		})
 	}
 
-	rows = append(rows, []telego.InlineKeyboardButton{
-		tu.InlineKeyboardButton(i18n.T("button.ignore")).WithCallbackData(fmt.Sprintf("ignore:%s:%s", userUUID, userID)),
-	})
+	if ignoreDuration > 0 {
+		ignoreLabel := fmt.Sprintf("%s %s", i18n.T("button.ignore_for"), FormatDuration(ignoreDuration))
+		rows = append(rows, []telego.InlineKeyboardButton{
+			tu.InlineKeyboardButton(ignoreLabel).WithCallbackData(fmt.Sprintf("ignore_temp:%s:%s", userUUID, userID)),
+		})
+	} else {
+		rows = append(rows, []telego.InlineKeyboardButton{
+			tu.InlineKeyboardButton(i18n.T("button.ignore")).WithCallbackData(fmt.Sprintf("ignore:%s:%s", userUUID, userID)),
+		})
+	}
 
 	keyboard := &telego.InlineKeyboardMarkup{InlineKeyboard: rows}
 	return b.sendMsg(text, keyboard)

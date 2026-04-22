@@ -90,6 +90,8 @@ type ActiveIP struct {
 	LastSeen time.Time
 	NodeName string
 	NodeUUID string
+	ASN      uint32
+	ASNOrg   string
 }
 
 type CachedUser struct {

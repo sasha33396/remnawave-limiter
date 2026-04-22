@@ -15,6 +15,7 @@ const (
 	prefixCooldown           = "cooldown:"
 	prefixViolationCount     = "violations:count:"
 	prefixViolationThreshold = "violations:threshold:"
+	prefixWhitelistTemp      = "whitelist:temp:"
 	keyWhitelist             = "whitelist"
 	keyRestoreQ              = "restore:queue"
 )
@@ -81,12 +82,22 @@ func (c *Cache) AddToWhitelist(ctx context.Context, userID string) error {
 	return c.client.SAdd(ctx, keyWhitelist, userID).Err()
 }
 
+func (c *Cache) AddToWhitelistTemp(ctx context.Context, userID string, ttl time.Duration) error {
+	return c.client.Set(ctx, prefixWhitelistTemp+userID, "1", ttl).Err()
+}
+
 func (c *Cache) RemoveFromWhitelist(ctx context.Context, userID string) error {
 	return c.client.SRem(ctx, keyWhitelist, userID).Err()
 }
 
 func (c *Cache) IsWhitelisted(ctx context.Context, userID string) (bool, error) {
-	return c.client.SIsMember(ctx, keyWhitelist, userID).Result()
+	pipe := c.client.Pipeline()
+	permCmd := pipe.SIsMember(ctx, keyWhitelist, userID)
+	tempCmd := pipe.Exists(ctx, prefixWhitelistTemp+userID)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return false, fmt.Errorf("whitelist pipeline: %w", err)
+	}
+	return permCmd.Val() || tempCmd.Val() > 0, nil
 }
 
 func (c *Cache) InitWhitelist(ctx context.Context, userIDs []string) error {

@@ -158,9 +158,16 @@ All settings via `.env` file or environment variables.
 | `WEBHOOK_URL` | — | URL for sending webhooks on violations (POST JSON). Empty = disabled |
 | `WEBHOOK_SECRET` | — | Secret for `X-Webhook-Secret` header (optional) |
 | `WHITELIST_USER_IDS` | — | UUIDs to exclude from checks (comma-separated) |
+| `IGNORE_DURATION` | `0` | TTL for the "Ignore" button action, in minutes. `0` = permanent (add to whitelist forever). `> 0` = temporary whitelist with automatic removal after TTL |
 | `VIOLATION_THRESHOLD` | `1` | Number of violations required before taking action. 1 = instant reaction |
 | `VIOLATION_THRESHOLD_WINDOW` | `3600` | Time window in seconds for counting violations. Counter resets if no new violations occur within this period |
-| `SUBNET_GROUPING` | `false` | Group IPs by /24 subnet (IPv4) and /48 (IPv6). When enabled, counts unique subnets instead of IPs — reduces false positives from CGNAT |
+| `SUBNET_GROUPING` | `false` | Group IPv4 addresses by `/SUBNET_PREFIX_V4` subnet. When enabled, counts unique subnets instead of IPs — reduces false positives from CGNAT. IPv6 is counted per-IP, no aggregation |
+| `SUBNET_PREFIX_V4` | `24` | IPv4 prefix length for device grouping (8..32). 24 is the default; 16 works well for mobile-heavy audiences where carriers rotate IPs across a wide range. Used when `SUBNET_GROUPING=true` |
+| `ASN_DATABASE_PATH` | `./geoip/GeoLite2-ASN.mmdb` | Path to the `GeoLite2-ASN.mmdb` file. The directory is created automatically. Override only for non-standard layouts (shared between services, system-wide GeoIP directory, etc.) |
+| `MAXMIND_LICENSE_KEY` | — | MaxMind license key. If set, the database is auto-downloaded on startup if missing and refreshed periodically. Register free at [maxmind.com](https://www.maxmind.com/en/geolite2/signup) |
+| `MAXMIND_UPDATE_INTERVAL` | `168h` | Auto-refresh interval (minimum `1h`). Only applies when `MAXMIND_LICENSE_KEY` is set |
+
+**ASN info in alerts.** When the MaxMind GeoLite2-ASN database is available (either the file already exists or `MAXMIND_LICENSE_KEY` is set), each IP in the Telegram alert and webhook payload is annotated with the provider name, e.g. `• 91.107.96.11 - Hetzner Online GmbH (Chicago-1)`. The ASN is for display only and never influences the device-limit decision — decisions use raw unique IPs or unique IPv4 subnets (when `SUBNET_GROUPING=true`). Additionally, the alert header shows the unique ASN count next to the IP count: `Detected: 4 IP (3 ASN)`. When no IP is resolved (MaxMind not set up), the suffix is omitted.
 | `REDIS_URL` | `redis://redis:6379` | Redis address |
 | `TIMEZONE` | `UTC` | Timezone for alert timestamps (e.g. `Europe/Moscow`) |
 | `LANGUAGE` | `ru` | Interface language: `ru` or `en` |
@@ -220,7 +227,7 @@ When the limit is exceeded, the bot sends an alert with buttons:
 
 [🔄 Drop connections] [🔒 Disable permanently]
 [🔒 Disable for 10 min]        ← if AUTO_DISABLE_DURATION > 0
-[🔇 Ignore]
+[🔇 Ignore for 15 min]         ← if IGNORE_DURATION > 0, otherwise "🔇 Ignore"
 ```
 
 | Button | Action |
@@ -228,7 +235,7 @@ When the limit is exceeded, the bot sends an alert with buttons:
 | Drop connections | Reset active user connections via API |
 | Disable permanently | Permanently deactivate subscription via API |
 | Disable for N min | Temporarily deactivate with auto-restore by timer (shown when `AUTO_DISABLE_DURATION > 0`) |
-| Ignore | Add to whitelist (no more alerts) |
+| Ignore | Add to whitelist. If `IGNORE_DURATION > 0` — temporarily (button shows duration), otherwise permanently |
 
 ### Automatic mode (`ACTION_MODE=auto`)
 
@@ -314,7 +321,7 @@ You can, but it's not recommended. The project runs its own Redis in Docker Comp
 
 ### How to add a user to the whitelist via the bot?
 
-Press the "Ignore" button in an alert. The user will be added to the whitelist in Redis and will no longer be checked. The whitelist persists across restarts.
+Press the "Ignore" button in an alert. The user will be added to the whitelist in Redis and will no longer be checked. The whitelist persists across restarts. If `IGNORE_DURATION > 0` is set, the ignore is only in effect for that time (in minutes), and after the TTL expires the user will be checked again.
 
 ### How to change the limit for a specific user?
 

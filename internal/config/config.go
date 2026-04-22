@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -22,6 +23,7 @@ type Config struct {
 	DefaultDeviceLimit  int
 	ActionMode          string
 	AutoDisableDuration int
+	IgnoreDuration      int
 	TelegramBotToken    string
 	TelegramChatID      int64
 	TelegramThreadID    int64
@@ -33,8 +35,12 @@ type Config struct {
 	RemnawaveCookies    string
 	WebhookURL          string
 	WebhookSecret       string
-	SubnetGrouping         bool
-	ViolationThreshold     int
+	SubnetGrouping           bool
+	SubnetPrefixV4           int
+	ASNDatabasePath          string
+	MaxMindLicenseKey        string
+	MaxMindUpdateInterval    time.Duration
+	ViolationThreshold       int
 	ViolationThresholdWindow int
 }
 
@@ -84,6 +90,11 @@ func LoadConfig(envPath string) (*Config, error) {
 
 	actionMode := getEnv("ACTION_MODE", "manual")
 
+	maxmindInterval, err := getEnvDuration("MAXMIND_UPDATE_INTERVAL", 168*time.Hour)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		RemnawaveAPIURL:     remnawaveAPIURL,
 		RemnawaveAPIToken:   remnawaveAPIToken,
@@ -96,6 +107,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		DefaultDeviceLimit:  getEnvInt("DEFAULT_DEVICE_LIMIT", 0),
 		ActionMode:          actionMode,
 		AutoDisableDuration: getEnvInt("AUTO_DISABLE_DURATION", 0),
+		IgnoreDuration:      getEnvInt("IGNORE_DURATION", 0),
 		TelegramBotToken:    telegramBotToken,
 		TelegramChatID:      telegramChatID,
 		TelegramThreadID:    telegramThreadID,
@@ -107,8 +119,12 @@ func LoadConfig(envPath string) (*Config, error) {
 		RemnawaveCookies:    getEnv("REMNAWAVE_COOKIES", ""),
 		WebhookURL:          getEnv("WEBHOOK_URL", ""),
 		WebhookSecret:       getEnv("WEBHOOK_SECRET", ""),
-		SubnetGrouping:         getEnvBool("SUBNET_GROUPING", false),
-		ViolationThreshold:     getEnvInt("VIOLATION_THRESHOLD", 1),
+		SubnetGrouping:           getEnvBool("SUBNET_GROUPING", false),
+		SubnetPrefixV4:           getEnvInt("SUBNET_PREFIX_V4", 24),
+		ASNDatabasePath:          getEnv("ASN_DATABASE_PATH", "./geoip/GeoLite2-ASN.mmdb"),
+		MaxMindLicenseKey:        getEnv("MAXMIND_LICENSE_KEY", ""),
+		MaxMindUpdateInterval:    maxmindInterval,
+		ViolationThreshold:       getEnvInt("VIOLATION_THRESHOLD", 1),
 		ViolationThresholdWindow: getEnvInt("VIOLATION_THRESHOLD_WINDOW", 3600),
 	}
 
@@ -137,6 +153,12 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.ViolationThresholdWindow <= 0 {
 		return fmt.Errorf("VIOLATION_THRESHOLD_WINDOW должен быть > 0, получено %d", cfg.ViolationThresholdWindow)
+	}
+	if cfg.SubnetPrefixV4 < 8 || cfg.SubnetPrefixV4 > 32 {
+		return fmt.Errorf("SUBNET_PREFIX_V4 должен быть в диапазоне 8..32, получено %d", cfg.SubnetPrefixV4)
+	}
+	if cfg.MaxMindUpdateInterval < time.Hour {
+		return fmt.Errorf("MAXMIND_UPDATE_INTERVAL должен быть >= 1h, получено %v", cfg.MaxMindUpdateInterval)
 	}
 	return nil
 }
@@ -194,6 +216,17 @@ func getEnvFloat64(key string, defaultValue float64) float64 {
 		return floatVal
 	}
 	return defaultValue
+}
+
+func getEnvDuration(key string, defaultValue time.Duration) (time.Duration, error) {
+	if value := os.Getenv(key); value != "" {
+		d, err := time.ParseDuration(value)
+		if err != nil {
+			return 0, fmt.Errorf("%s: невозможно преобразовать %q в duration: %v", key, value, err)
+		}
+		return d, nil
+	}
+	return defaultValue, nil
 }
 
 func getEnvBool(key string, defaultValue bool) bool {

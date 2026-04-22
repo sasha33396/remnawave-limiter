@@ -25,6 +25,8 @@ type IPPayload struct {
 	NodeName string    `json:"node_name"`
 	NodeUUID string    `json:"node_uuid"`
 	LastSeen time.Time `json:"last_seen"`
+	ASN      uint32    `json:"asn,omitempty"`
+	ASNOrg   string    `json:"asn_org,omitempty"`
 }
 
 type ViolationPayload struct {
@@ -35,6 +37,7 @@ type ViolationPayload struct {
 	EffectiveLimit    int         `json:"effective_limit"`
 	ViolationCount24h int64       `json:"violation_count_24h"`
 	SubnetCount       int         `json:"subnet_count,omitempty"`
+	DeviceGroupCount  int         `json:"device_group_count"`
 }
 
 type ActionPayload struct {

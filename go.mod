@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mymmrac/telego v1.7.0
+	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/sirupsen/logrus v1.9.4
 )

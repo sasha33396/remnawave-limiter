@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func clearEnv() {
@@ -10,7 +11,7 @@ func clearEnv() {
 		"REMNAWAVE_API_URL", "REMNAWAVE_API_TOKEN",
 		"CHECK_INTERVAL", "ACTIVE_IP_WINDOW", "TOLERANCE", "TOLERANCE_MULTIPLIER", "COOLDOWN",
 		"USER_CACHE_TTL", "DEFAULT_DEVICE_LIMIT",
-		"ACTION_MODE", "AUTO_DISABLE_DURATION",
+		"ACTION_MODE", "AUTO_DISABLE_DURATION", "IGNORE_DURATION",
 		"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_THREAD_ID", "TELEGRAM_ADMIN_IDS",
 		"WHITELIST_USER_IDS",
 		"REDIS_URL",
@@ -18,6 +19,9 @@ func clearEnv() {
 		"LANGUAGE",
 		"WEBHOOK_URL", "WEBHOOK_SECRET",
 		"SUBNET_GROUPING",
+		"SUBNET_PREFIX_V4",
+		"ASN_DATABASE_PATH",
+		"MAXMIND_LICENSE_KEY", "MAXMIND_UPDATE_INTERVAL",
 	}
 	for _, v := range vars {
 		os.Unsetenv(v)
@@ -83,6 +87,9 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	}
 	if cfg.AutoDisableDuration != 0 {
 		t.Errorf("AutoDisableDuration = %d, want 0", cfg.AutoDisableDuration)
+	}
+	if cfg.IgnoreDuration != 0 {
+		t.Errorf("IgnoreDuration = %d, want 0", cfg.IgnoreDuration)
 	}
 	if cfg.RedisURL != "redis://redis:6379" {
 		t.Errorf("RedisURL = %q, want %q", cfg.RedisURL, "redis://redis:6379")
@@ -225,5 +232,167 @@ func TestLoadConfig_SubnetGrouping_Enabled(t *testing.T) {
 
 	if cfg.SubnetGrouping != true {
 		t.Errorf("SubnetGrouping = %v, want true", cfg.SubnetGrouping)
+	}
+}
+
+func TestLoadConfig_SubnetPrefix_Defaults(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.SubnetPrefixV4 != 24 {
+		t.Errorf("SubnetPrefixV4 = %d, want 24", cfg.SubnetPrefixV4)
+	}
+}
+
+func TestLoadConfig_SubnetPrefix_Custom(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("SUBNET_PREFIX_V4", "16")
+	defer os.Unsetenv("SUBNET_PREFIX_V4")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.SubnetPrefixV4 != 16 {
+		t.Errorf("SubnetPrefixV4 = %d, want 16", cfg.SubnetPrefixV4)
+	}
+}
+
+func TestLoadConfig_SubnetPrefix_ValidationV4(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"too_low", "7"},
+		{"too_high", "33"},
+		{"zero", "0"},
+		{"negative", "-1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clearEnv()
+			setRequiredEnv()
+			os.Setenv("SUBNET_PREFIX_V4", tc.value)
+			defer os.Unsetenv("SUBNET_PREFIX_V4")
+
+			_, err := LoadConfig("")
+			if err == nil {
+				t.Errorf("expected validation error for SUBNET_PREFIX_V4=%s, got nil", tc.value)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_ASN_Database_Defaults(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ASNDatabasePath != "./geoip/GeoLite2-ASN.mmdb" {
+		t.Errorf("ASNDatabasePath = %q, want default ./geoip/GeoLite2-ASN.mmdb", cfg.ASNDatabasePath)
+	}
+}
+
+func TestLoadConfig_ASN_Database_Custom(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("ASN_DATABASE_PATH", "/var/lib/geoip/GeoLite2-ASN.mmdb")
+	defer os.Unsetenv("ASN_DATABASE_PATH")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ASNDatabasePath != "/var/lib/geoip/GeoLite2-ASN.mmdb" {
+		t.Errorf("ASNDatabasePath = %q, want /var/lib/geoip/GeoLite2-ASN.mmdb", cfg.ASNDatabasePath)
+	}
+}
+
+func TestLoadConfig_MaxMind_Defaults(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.MaxMindLicenseKey != "" {
+		t.Errorf("MaxMindLicenseKey = %q, want empty", cfg.MaxMindLicenseKey)
+	}
+	expected := 168 * time.Hour
+	if cfg.MaxMindUpdateInterval != expected {
+		t.Errorf("MaxMindUpdateInterval = %v, want %v", cfg.MaxMindUpdateInterval, expected)
+	}
+}
+
+func TestLoadConfig_MaxMind_Custom(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("MAXMIND_LICENSE_KEY", "abc123")
+	os.Setenv("MAXMIND_UPDATE_INTERVAL", "24h")
+	defer os.Unsetenv("MAXMIND_LICENSE_KEY")
+	defer os.Unsetenv("MAXMIND_UPDATE_INTERVAL")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.MaxMindLicenseKey != "abc123" {
+		t.Errorf("MaxMindLicenseKey = %q, want %q", cfg.MaxMindLicenseKey, "abc123")
+	}
+	if cfg.MaxMindUpdateInterval != 24*time.Hour {
+		t.Errorf("MaxMindUpdateInterval = %v, want 24h", cfg.MaxMindUpdateInterval)
+	}
+}
+
+func TestLoadConfig_MaxMind_IntervalTooShort_Fails(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("MAXMIND_UPDATE_INTERVAL", "30m")
+	defer os.Unsetenv("MAXMIND_UPDATE_INTERVAL")
+
+	_, err := LoadConfig("")
+	if err == nil {
+		t.Fatal("expected validation error for MAXMIND_UPDATE_INTERVAL=30m, got nil")
+	}
+}
+
+func TestLoadConfig_MaxMind_IntervalInvalid_Fails(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("MAXMIND_UPDATE_INTERVAL", "not-a-duration")
+	defer os.Unsetenv("MAXMIND_UPDATE_INTERVAL")
+
+	_, err := LoadConfig("")
+	if err == nil {
+		t.Fatal("expected validation error for unparseable MAXMIND_UPDATE_INTERVAL, got nil")
+	}
+}
+
+func TestLoadConfig_IgnoreDuration_Custom(t *testing.T) {
+	clearEnv()
+	setRequiredEnv()
+	os.Setenv("IGNORE_DURATION", "15")
+	defer os.Unsetenv("IGNORE_DURATION")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.IgnoreDuration != 15 {
+		t.Errorf("IgnoreDuration = %d, want 15", cfg.IgnoreDuration)
 	}
 }

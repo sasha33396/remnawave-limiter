@@ -217,3 +217,98 @@ func TestCache_ClientType(t *testing.T) {
 	_ = c.client
 	var _ *redis.Client = c.client
 }
+
+func TestCache_WhitelistTemp(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	ok, err := c.IsWhitelisted(ctx, "user-temp")
+	if err != nil {
+		t.Fatalf("IsWhitelisted error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected not whitelisted initially")
+	}
+
+	if err := c.AddToWhitelistTemp(ctx, "user-temp", 10*time.Second); err != nil {
+		t.Fatalf("AddToWhitelistTemp error: %v", err)
+	}
+
+	ok, err = c.IsWhitelisted(ctx, "user-temp")
+	if err != nil {
+		t.Fatalf("IsWhitelisted error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected whitelisted after AddToWhitelistTemp")
+	}
+
+	// Пользователя нет в постоянном set — только во временном ключе
+	inSet, err := c.client.SIsMember(ctx, keyWhitelist, "user-temp").Result()
+	if err != nil {
+		t.Fatalf("SIsMember error: %v", err)
+	}
+	if inSet {
+		t.Fatal("AddToWhitelistTemp must not add to permanent set")
+	}
+}
+
+func TestCache_WhitelistTemp_Expires(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	if err := c.AddToWhitelistTemp(ctx, "user-exp", 1*time.Second); err != nil {
+		t.Fatalf("AddToWhitelistTemp error: %v", err)
+	}
+
+	ok, err := c.IsWhitelisted(ctx, "user-exp")
+	if err != nil {
+		t.Fatalf("IsWhitelisted error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected whitelisted before TTL expiry")
+	}
+
+	time.Sleep(1500 * time.Millisecond)
+
+	ok, err = c.IsWhitelisted(ctx, "user-exp")
+	if err != nil {
+		t.Fatalf("IsWhitelisted error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected NOT whitelisted after TTL expiry")
+	}
+}
+
+func TestCache_Whitelist_PermanentAndTempIndependent(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	if err := c.AddToWhitelist(ctx, "perm-user"); err != nil {
+		t.Fatalf("AddToWhitelist error: %v", err)
+	}
+	if err := c.AddToWhitelistTemp(ctx, "temp-user", 10*time.Second); err != nil {
+		t.Fatalf("AddToWhitelistTemp error: %v", err)
+	}
+
+	for _, id := range []string{"perm-user", "temp-user"} {
+		ok, err := c.IsWhitelisted(ctx, id)
+		if err != nil {
+			t.Fatalf("IsWhitelisted(%q) error: %v", id, err)
+		}
+		if !ok {
+			t.Fatalf("expected %q to be whitelisted", id)
+		}
+	}
+
+	// Удаление из постоянного set не должно влиять на временный ключ
+	if err := c.RemoveFromWhitelist(ctx, "temp-user"); err != nil {
+		t.Fatalf("RemoveFromWhitelist error: %v", err)
+	}
+	ok, err := c.IsWhitelisted(ctx, "temp-user")
+	if err != nil {
+		t.Fatalf("IsWhitelisted error: %v", err)
+	}
+	if !ok {
+		t.Fatal("RemoveFromWhitelist должен удалять только постоянный, временный остаётся")
+	}
+}

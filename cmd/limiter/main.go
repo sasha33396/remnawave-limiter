@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/remnawave/limiter/internal/api"
 	"github.com/remnawave/limiter/internal/cache"
 	"github.com/remnawave/limiter/internal/config"
+	"github.com/remnawave/limiter/internal/geoip"
 	"github.com/remnawave/limiter/internal/i18n"
 	"github.com/remnawave/limiter/internal/monitor"
 	"github.com/remnawave/limiter/internal/telegram"
@@ -32,6 +34,55 @@ func main() {
 	}
 
 	i18n.SetLanguage(cfg.Language)
+
+	var resolver geoip.Resolver = geoip.NopResolver{}
+	var asnDB *geoip.DBResolver
+	var maxmindLoaded bool
+
+	dbPath := cfg.ASNDatabasePath
+	_, statErr := os.Stat(dbPath)
+	switch {
+	case cfg.MaxMindLicenseKey != "":
+		if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+			logger.Fatalf("Не удалось создать директорию для базы ASN %s: %v", filepath.Dir(dbPath), err)
+		}
+		if os.IsNotExist(statErr) {
+			logger.Infof("Файл базы ASN %s не найден, скачиваю через MaxMind...", dbPath)
+			dl := &geoip.Downloader{
+				LicenseKey: cfg.MaxMindLicenseKey,
+				Validate:   geoip.DefaultValidate,
+			}
+			bootstrapCtx, cancelBootstrap := context.WithTimeout(context.Background(), 5*time.Minute)
+			if err := dl.Download(bootstrapCtx, dbPath); err != nil {
+				cancelBootstrap()
+				logger.Fatalf("Ошибка загрузки базы ASN: %v", err)
+			}
+			cancelBootstrap()
+			logger.Info("База ASN успешно загружена")
+		}
+		db, err := geoip.NewDBResolver(dbPath)
+		if err != nil {
+			logger.Fatalf("Ошибка открытия базы ASN: %v", err)
+		}
+		defer db.Close()
+		asnDB = db
+		resolver = db
+		maxmindLoaded = true
+		logger.Infof("ASN enrichment включён, база: %s", dbPath)
+	case statErr == nil:
+		db, err := geoip.NewDBResolver(dbPath)
+		if err != nil {
+			logger.Warnf("Не удалось открыть базу ASN %s: %v. ASN enrichment отключён", dbPath, err)
+		} else {
+			defer db.Close()
+			asnDB = db
+			resolver = db
+			maxmindLoaded = true
+			logger.Infof("ASN enrichment включён (без auto-update, MAXMIND_LICENSE_KEY не задан), база: %s", dbPath)
+		}
+	default:
+		logger.Info("ASN enrichment отключён: MAXMIND_LICENSE_KEY не задан и файл базы не найден")
+	}
 
 	logger.Infof("Режим: %s", cfg.ActionMode)
 	logger.Infof("Интервал проверки: %dс", cfg.CheckInterval)
@@ -74,7 +125,7 @@ func main() {
 		logger.Info("Webhook включён")
 	}
 
-	mon, err := monitor.New(cfg, apiClient, redisCache, bot, webhookClient, logger)
+	mon, err := monitor.New(cfg, apiClient, redisCache, bot, webhookClient, resolver, logger)
 	if err != nil {
 		logger.Fatalf("Ошибка монитора: %v", err)
 	}
@@ -100,6 +151,9 @@ func main() {
 			return apiClient.EnableUser(ctx, userUUID)
 		case "ignore":
 			return redisCache.AddToWhitelist(ctx, userID)
+		case "ignore_temp":
+			ttl := time.Duration(cfg.IgnoreDuration) * time.Minute
+			return redisCache.AddToWhitelistTemp(ctx, userID, ttl)
 		}
 		return nil
 	})
@@ -115,6 +169,8 @@ func main() {
 		cfg.AutoDisableDuration,
 		cfg.WebhookURL != "",
 		cfg.SubnetGrouping,
+		cfg.SubnetPrefixV4,
+		maxmindLoaded,
 		cfg.ViolationThreshold,
 		cfg.ViolationThresholdWindow,
 	)
@@ -124,6 +180,21 @@ func main() {
 
 	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if asnDB != nil && cfg.MaxMindLicenseKey != "" {
+		updater := &geoip.Updater{
+			Downloader: &geoip.Downloader{
+				LicenseKey: cfg.MaxMindLicenseKey,
+				Validate:   geoip.DefaultValidate,
+			},
+			Reloader: asnDB,
+			DstPath:  cfg.ASNDatabasePath,
+			Interval: cfg.MaxMindUpdateInterval,
+			Logger:   logger,
+		}
+		go updater.Run(sigCtx)
+		logger.Infof("Авто-обновление базы ASN включено, интервал: %v", cfg.MaxMindUpdateInterval)
+	}
 
 	go bot.StartPolling(sigCtx)
 	mon.Run(sigCtx)

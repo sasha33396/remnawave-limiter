@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/remnawave/limiter/internal/api"
 	"github.com/remnawave/limiter/internal/cache"
 	"github.com/remnawave/limiter/internal/config"
+	"github.com/remnawave/limiter/internal/geoip"
 	"github.com/remnawave/limiter/internal/i18n"
 	"github.com/remnawave/limiter/internal/telegram"
 	"github.com/remnawave/limiter/internal/webhook"
@@ -25,9 +25,10 @@ type Monitor struct {
 	webhook  *webhook.Client
 	logger   *logrus.Logger
 	location *time.Location
+	resolver geoip.Resolver
 }
 
-func New(cfg *config.Config, apiClient *api.Client, c *cache.Cache, bot *telegram.Bot, wh *webhook.Client, logger *logrus.Logger) (*Monitor, error) {
+func New(cfg *config.Config, apiClient *api.Client, c *cache.Cache, bot *telegram.Bot, wh *webhook.Client, resolver geoip.Resolver, logger *logrus.Logger) (*Monitor, error) {
 	loc, err := time.LoadLocation(cfg.Timezone)
 	if err != nil {
 		return nil, fmt.Errorf("неверная таймзона %q: %w", cfg.Timezone, err)
@@ -41,6 +42,7 @@ func New(cfg *config.Config, apiClient *api.Client, c *cache.Cache, bot *telegra
 		webhook:  wh,
 		logger:   logger,
 		location: loc,
+		resolver: resolver,
 	}, nil
 }
 
@@ -151,13 +153,24 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		uniqueIPs = append(uniqueIPs, ip)
 	}
 
-	deviceCount := len(uniqueIPs)
-	if m.config.SubnetGrouping {
-		subnets := make(map[string]struct{})
-		for _, ip := range uniqueIPs {
-			subnets[subnetPrefix(ip.IP)] = struct{}{}
+	if m.resolver != nil {
+		for i := range uniqueIPs {
+			if info, ok := m.resolver.Lookup(uniqueIPs[i].IP); ok {
+				uniqueIPs[i].ASN = info.Number
+				uniqueIPs[i].ASNOrg = info.Org
+			}
 		}
-		deviceCount = len(subnets)
+	}
+
+	deviceCount := len(uniqueIPs)
+	subnetGroups := 0
+	if m.config.SubnetGrouping {
+		seen := make(map[string]struct{})
+		for _, ip := range uniqueIPs {
+			seen[subnetPrefix(ip.IP, m.config.SubnetPrefixV4)] = struct{}{}
+		}
+		subnetGroups = len(seen)
+		deviceCount = subnetGroups
 	}
 
 	whitelisted, err := m.cache.IsWhitelisted(ctx, userID)
@@ -235,12 +248,12 @@ func (m *Monitor) checkUser(ctx context.Context, userID string, activeIPs []api.
 		"violations": violationCount,
 	}).Warn(i18n.T("log.limit_exceeded"))
 
-	m.sendWebhook(ctx, user, uniqueIPs, limit, violationCount, deviceCount)
+	m.sendWebhook(ctx, user, uniqueIPs, limit, violationCount, subnetGroups)
 
 	if m.config.ActionMode == "auto" {
-		m.handleAutoAction(ctx, user, uniqueIPs, limit, violationCount, deviceCount)
+		m.handleAutoAction(ctx, user, uniqueIPs, limit, violationCount, subnetGroups)
 	} else {
-		m.handleManualAction(user, uniqueIPs, limit, violationCount, deviceCount)
+		m.handleManualAction(user, uniqueIPs, limit, violationCount, subnetGroups)
 	}
 }
 
@@ -296,14 +309,14 @@ func (m *Monitor) resolveLimit(hwidDeviceLimit int) int {
 	return hwidDeviceLimit
 }
 
-func (m *Monitor) handleManualAction(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, deviceCount int) {
-	text := telegram.FormatManualAlert(user, ips, limit, violationCount, m.location, deviceCount)
-	if err := m.bot.SendManualAlert(text, user.UUID, user.UserID, m.config.AutoDisableDuration); err != nil {
+func (m *Monitor) handleManualAction(user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, subnetGroups int) {
+	text := telegram.FormatManualAlert(user, ips, limit, violationCount, m.location, subnetGroups, m.config.SubnetGrouping)
+	if err := m.bot.SendManualAlert(text, user.UUID, user.UserID, m.config.AutoDisableDuration, m.config.IgnoreDuration); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отправки manual alert")
 	}
 }
 
-func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, deviceCount int) {
+func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, subnetGroups int) {
 	if err := m.api.DisableUser(ctx, user.UUID); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отключения пользователя")
 		return
@@ -316,13 +329,13 @@ func (m *Monitor) handleAutoAction(ctx context.Context, user *api.CachedUser, ip
 		}
 	}
 
-	text := telegram.FormatAutoAlert(user, ips, limit, m.config.AutoDisableDuration, violationCount, m.location, deviceCount)
+	text := telegram.FormatAutoAlert(user, ips, limit, m.config.AutoDisableDuration, violationCount, m.location, subnetGroups, m.config.SubnetGrouping)
 	if err := m.bot.SendAutoAlert(text, user.UUID); err != nil {
 		m.logger.WithError(err).WithField("userID", user.UserID).Error("Ошибка отправки auto alert")
 	}
 }
 
-func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, deviceCount int) {
+func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []api.ActiveIP, limit int, violationCount int64, subnetGroups int) {
 	if m.webhook == nil {
 		return
 	}
@@ -334,10 +347,16 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 			NodeName: ip.NodeName,
 			NodeUUID: ip.NodeUUID,
 			LastSeen: ip.LastSeen,
+			ASN:      ip.ASN,
+			ASNOrg:   ip.ASNOrg,
 		}
 	}
 
 	effectiveTolerance := m.config.Tolerance + int(float64(limit)*m.config.ToleranceMultiplier)
+	deviceGroupCount := len(ips)
+	if m.config.SubnetGrouping && subnetGroups > 0 {
+		deviceGroupCount = subnetGroups
+	}
 
 	payload := &webhook.Payload{
 		Event:      "violation_detected",
@@ -357,7 +376,8 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 			Tolerance:         effectiveTolerance,
 			EffectiveLimit:    limit + effectiveTolerance,
 			ViolationCount24h: violationCount,
-			SubnetCount:       deviceCount,
+			SubnetCount:       subnetGroups,
+			DeviceGroupCount:  deviceGroupCount,
 		},
 		Action: webhook.ActionPayload{
 			AutoDisableDurationMin: m.config.AutoDisableDuration,
@@ -366,23 +386,6 @@ func (m *Monitor) sendWebhook(ctx context.Context, user *api.CachedUser, ips []a
 	}
 
 	m.webhook.Send(ctx, payload)
-}
-
-func subnetPrefix(ipStr string) string {
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		return ipStr
-	}
-	if ip4 := ip.To4(); ip4 != nil {
-		masked := net.IPv4(ip4[0], ip4[1], ip4[2], 0)
-		return masked.String() + "/24"
-	}
-	masked := make(net.IP, len(ip))
-	copy(masked, ip)
-	for i := 6; i < 16; i++ {
-		masked[i] = 0
-	}
-	return masked.String() + "/48"
 }
 
 func (m *Monitor) restoreLoop(ctx context.Context) {
