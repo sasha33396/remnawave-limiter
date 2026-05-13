@@ -8,6 +8,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/sirupsen/logrus v1.9.4
+	github.com/valyala/fasthttp v1.69.0
 )
 
 require (
@@ -23,7 +24,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.69.0 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect

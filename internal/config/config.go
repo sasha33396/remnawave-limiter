@@ -28,6 +28,7 @@ type Config struct {
 	TelegramChatID      int64
 	TelegramThreadID    int64
 	TelegramAdminIDs    []int64
+	TelegramProxyURL    string
 	WhitelistUserIDs    []string
 	RedisURL            string
 	Timezone            string
@@ -112,6 +113,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		TelegramChatID:      telegramChatID,
 		TelegramThreadID:    telegramThreadID,
 		TelegramAdminIDs:    telegramAdminIDs,
+		TelegramProxyURL:    strings.TrimSpace(getEnv("TELEGRAM_PROXY", "")),
 		WhitelistUserIDs:    parseList(getEnv("WHITELIST_USER_IDS", "")),
 		RedisURL:            getEnv("REDIS_URL", "redis://redis:6379"),
 		Timezone:            getEnv("TIMEZONE", "UTC"),

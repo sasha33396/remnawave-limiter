@@ -1,6 +1,7 @@
 services:
   limiter:
     image: ghcr.io/syvlech/remnawave-limiter:latest
+    build: .
     container_name: remnawave-limiter
     restart: unless-stopped
     env_file:

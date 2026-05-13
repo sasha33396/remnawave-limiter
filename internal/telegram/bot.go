@@ -8,6 +8,7 @@ import (
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
 	"github.com/sirupsen/logrus"
+	"github.com/valyala/fasthttp"
 
 	"github.com/remnawave/limiter/internal/i18n"
 )
@@ -23,8 +24,18 @@ type Bot struct {
 	onAction ActionHandler
 }
 
-func NewBot(token string, chatID, threadID int64, adminIDs []int64, logger *logrus.Logger) (*Bot, error) {
-	bot, err := telego.NewBot(token)
+func NewBot(token string, chatID, threadID int64, adminIDs []int64, proxyURL string, logger *logrus.Logger) (*Bot, error) {
+	var opts []telego.BotOption
+	if proxyURL != "" {
+		dial, safeURL, err := buildProxyDialer(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("TELEGRAM_PROXY: %w", err)
+		}
+		opts = append(opts, telego.WithFastHTTPClient(&fasthttp.Client{Dial: dial}))
+		logger.Infof("Telegram бот: используется прокси %s", safeURL)
+	}
+
+	bot, err := telego.NewBot(token, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("не удалось создать Telegram бота: %w", err)
 	}

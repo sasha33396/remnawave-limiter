@@ -113,7 +113,7 @@ func main() {
 		logger.Info("Cookie авторизация включена")
 	}
 
-	bot, err := telegram.NewBot(cfg.TelegramBotToken, cfg.TelegramChatID, cfg.TelegramThreadID, cfg.TelegramAdminIDs, logger)
+	bot, err := telegram.NewBot(cfg.TelegramBotToken, cfg.TelegramChatID, cfg.TelegramThreadID, cfg.TelegramAdminIDs, cfg.TelegramProxyURL, logger)
 	if err != nil {
 		logger.Fatalf("Ошибка Telegram: %v", err)
 	}
